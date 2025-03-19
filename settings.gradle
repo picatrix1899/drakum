@@ -1,0 +1,5 @@
+rootProject.name = 'drakum'
+
+include('drakum-engine')
+
+include('drakum-demo')

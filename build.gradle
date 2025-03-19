@@ -1,0 +1,131 @@
+subprojects {
+  apply plugin: 'java'
+  apply plugin: 'maven-publish'
+  apply plugin: 'eclipse'
+  
+  repositories {
+  	mavenLocal()
+    mavenCentral()
+  }
+  
+  dependencies {
+    testImplementation 'org.mockito:mockito-core:5.11.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.3'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.3'
+  }
+  
+  java {
+    withJavadocJar()
+    withSourcesJar()
+	
+	toolchain {
+        languageVersion = JavaLanguageVersion.of(23)
+    }
+	
+	sourceCompatibility = '23'
+    targetCompatibility = '23'
+  }
+  
+  testing {
+    suites {
+      test {
+        useJUnitJupiter('5.9.3')
+      }
+    }
+  }
+  
+  test {
+  	useJUnitPlatform()
+  	enabled = false
+  }
+  
+  compileJava {
+	options.encoding = "UTF-8"
+	
+	sourceCompatibility = '23'
+    targetCompatibility = '23'
+  }
+  
+  compileTestJava {
+	options.encoding = "UTF-8"
+	
+	sourceCompatibility = '23'
+    targetCompatibility = '23'
+  }
+  
+  tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += ['--enable-preview']
+    options.failOnError = false
+  }
+  
+  tasks.withType(Javadoc).configureEach {
+    setFailOnError(false)
+  }
+  
+  javadoc {
+  
+  	// Enable more javadoc tags.
+  	options.addMultilineStringsOption('tag').setValue([
+  	
+  	  // Enable the javadoc tags @apiNote, @implSpec and @implNote for better documentation as they are not enabled by default.
+  	  'apiNote:a:"API Note:"',
+  	  'implSpec:a:"Implementation Requirements:"',
+  	  'implNote:a:"Implementation Note:"'
+  	])
+  }
+  
+  eclipse {
+    project {
+	  natures 'org.eclipse.buildship.core.gradleprojectnature'
+	
+	  buildCommand 'org.eclipse.buildship.core.gradleprojectbuilder'
+    }
+  
+    jdt {
+      sourceCompatibility = '23'
+      targetCompatibility = '23'
+      javaRuntimeName = 'JavaSE-23'
+    }
+  
+    classpath {
+      downloadSources = true
+      downloadJavadoc = true
+    }
+  }
+  
+  publishing {
+    repositories {
+      maven {
+        name = 'GitHubPackages'
+        url = 'https://maven.pkg.github.com/picatrix1899/drakum'
+        credentials {
+          username = System.getenv('USERNAME')
+          password = System.getenv('TOKEN')
+        }
+      }
+    }
+
+    publications {
+      mavenJava(MavenPublication) {
+        pom {
+          url = 'https://github.com/picatrix1899/drakum/'
+
+          licenses {
+            license {
+              name = 'MIT'
+              url = 'https://github.com/picatrix1899/drakum/blob/master/LICENSE'
+              distribution = 'repo'
+            }
+          }
+
+          developers {
+            developer {
+              id = 'picatrix1899'
+              name = 'Florian Zilkenat (picatrix1899)'
+            }
+          }
+        }
+      }
+    }
+  }
+}

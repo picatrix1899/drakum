@@ -1,0 +1,44 @@
+plugins {
+    id 'application'
+}
+
+configurations {
+    compileOnlyResolvable {
+        canBeResolved = true // Ermöglicht das Auflösen für Tasks
+        canBeConsumed = false // Verhindert, dass diese Konfiguration in das JAR-Artefakt eingeht
+        extendsFrom compileOnly
+    }
+}
+
+testing {
+    suites {
+        // Configure the built-in test suite
+        test {
+            // Use JUnit Jupiter test framework
+            useJUnitJupiter('5.10.1')
+        }
+    }
+}
+
+publishing {
+  publications {
+	mavenJava(MavenPublication) {
+	  artifactId = 'drakum-demo'
+		
+	  from components.java
+		
+	  pom {
+		name = 'Project Barghos Documentation Library'
+		description = 'This library contains the documentation annotations of Project Barghos.'
+		url = 'https://github.com/picatrix1899/drakum/'
+	  }
+	}
+  }
+}
+
+eclipse {
+  project {
+	name = 'drakum-demo'
+	comment = ''
+  }
+}
