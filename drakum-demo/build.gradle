@@ -2,6 +2,24 @@ plugins {
     id 'application'
 }
 
+project.ext.lwjglVersion = "3.3.6"
+project.ext.lwjglNatives = "natives-windows"
+
+dependencies {
+  implementation platform("org.lwjgl:lwjgl-bom:$lwjglVersion")
+  
+  implementation "org.lwjgl:lwjgl"
+  implementation "org.lwjgl:lwjgl-glfw"
+  implementation "org.lwjgl:lwjgl-vulkan"
+  
+  runtimeOnly "org.lwjgl:lwjgl::$lwjglNatives"
+  runtimeOnly "org.lwjgl:lwjgl-glfw::$lwjglNatives"
+  
+  
+  implementation 'org.joml:joml:1.10.8'
+  implementation 'it.unimi.dsi:fastutil:8.5.15'
+}
+
 configurations {
     compileOnlyResolvable {
         canBeResolved = true // Ermöglicht das Auflösen für Tasks
