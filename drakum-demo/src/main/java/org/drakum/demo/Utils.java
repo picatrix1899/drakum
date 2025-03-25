@@ -7,6 +7,7 @@ import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK10.VK_NULL_HANDLE;
 import static org.lwjgl.vulkan.VK10.vkCreatePipelineLayout;
 import static org.lwjgl.vulkan.VK10.vkCreateShaderModule;
+import static org.lwjgl.vulkan.VK10.vkMapMemory;
 import static org.lwjgl.vulkan.VK14.*;
 
 import java.nio.IntBuffer;
@@ -289,6 +290,15 @@ public class Utils
 		LongBuffer buf = stack.callocLong(1);
 		
 		vkCreateBuffer(device, createInfo, null, buf);
+		
+		return buf.get(0);
+	}
+	
+	public static long mapMemory(VkDevice device, long memory, long offset, long size, int flags, MemoryStack stack)
+	{
+		PointerBuffer buf = stack.mallocPointer(1);
+		
+		vkMapMemory(device, memory, offset, size, flags, buf);
 		
 		return buf.get(0);
 	}
