@@ -17,6 +17,7 @@ import java.nio.file.Paths;
 
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
 
+import org.barghos.util.byref.ByRef;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
 import org.lwjgl.PointerBuffer;
@@ -27,6 +28,7 @@ import org.lwjgl.vulkan.EXTDebugUtils;
 import org.lwjgl.vulkan.VkApplicationInfo;
 import org.lwjgl.vulkan.VkAttachmentDescription;
 import org.lwjgl.vulkan.VkAttachmentReference;
+import org.lwjgl.vulkan.VkBufferCopy;
 import org.lwjgl.vulkan.VkBufferCreateInfo;
 import org.lwjgl.vulkan.VkClearColorValue;
 import org.lwjgl.vulkan.VkClearValue;
@@ -142,6 +144,9 @@ public class Engine
 	
 	private long vertexBuffer;
 	private long vertexBufferMemory;
+	
+	private long stagingBuffer;
+	private long stagingBufferMemory;
 	
 	public void start()
 	{
@@ -756,6 +761,9 @@ public class Engine
 		vkDestroyBuffer(device, vertexBuffer, null);
 		vkFreeMemory(device, vertexBufferMemory, null);
 		
+		vkDestroyBuffer(device, stagingBuffer, null);
+		vkFreeMemory(device, stagingBufferMemory, null);
+		
 		vkDestroySemaphore(device, imageAvailableSemaphore, null);
 		vkDestroySemaphore(device, renderFinishedSemaphore, null);
 
@@ -830,38 +838,19 @@ public class Engine
 	
 	public void createVertextBuffer(MemoryStack stack)
 	{
-		VkBufferCreateInfo bufferCreateInfo = VkBufferCreateInfo.calloc(stack);
-		bufferCreateInfo.sType$Default();
-		bufferCreateInfo.size(((int)ValueLayout.JAVA_FLOAT.byteSize() * (2 + 3)) * vertices.length);
-		bufferCreateInfo.usage(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-		bufferCreateInfo.sharingMode(VK_SHARING_MODE_EXCLUSIVE);
+		ByRef<Long> byrefStagingBuffer = new ByRef<>();
+		ByRef<Long> byrefStagingBufferMemory = new ByRef<>();
 		
-		vertexBuffer = Utils.createBuffer(device, bufferCreateInfo, stack);
+		createBuffer(Vertex.byteSize() * vertices.length, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, byrefStagingBuffer, byrefStagingBufferMemory, stack);
 		
-		VkMemoryRequirements memoryRequirements = VkMemoryRequirements.calloc(stack);
-		
-		vkGetBufferMemoryRequirements(device, vertexBuffer, memoryRequirements);
-		
-		VkMemoryAllocateInfo memoryAllocateInfo = VkMemoryAllocateInfo.calloc(stack);
-		memoryAllocateInfo.sType$Default();
-		memoryAllocateInfo.allocationSize(memoryRequirements.size());
-		memoryAllocateInfo.memoryTypeIndex(findMemoryType(memoryRequirements.memoryTypeBits(), VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stack));
-		
-		LongBuffer memoryBuffer = stack.mallocLong(1);
-		
-		vkAllocateMemory(device, memoryAllocateInfo, null, memoryBuffer);
-		
-		vertexBufferMemory = memoryBuffer.get(0);
-		
-		vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);
+		stagingBuffer = byrefStagingBuffer.value;
+		stagingBufferMemory = byrefStagingBufferMemory.value;
 		
 		PointerBuffer mappedMemoryBuffer = stack.mallocPointer(1);
 		
-		vkMapMemory(device, vertexBufferMemory, 0, ((int)ValueLayout.JAVA_FLOAT.byteSize() * (2 + 3)) * vertices.length, 0, mappedMemoryBuffer);
+		vkMapMemory(device, stagingBufferMemory, 0, Vertex.byteSize() * vertices.length, 0, mappedMemoryBuffer);
 		
-//		ByteBuffer mappedMemory = stack.calloc(((int)ValueLayout.JAVA_FLOAT.byteSize() * (2 + 3)) * vertices.length);
-		
-		FloatBuffer floatMappedMemory = MemoryUtil.memFloatBuffer(mappedMemoryBuffer.get(0), (2 + 3) * vertices.length);
+		FloatBuffer floatMappedMemory = MemoryUtil.memFloatBuffer(mappedMemoryBuffer.get(0), Vertex.floatSize() * vertices.length);
 		
 		for(Vertex v : vertices)
 		{
@@ -872,11 +861,84 @@ public class Engine
 			floatMappedMemory.put(v.color.z);
 		}
 		
-		floatMappedMemory.flip();
+		vkUnmapMemory(device, stagingBufferMemory);
 		
-		//MemoryUtil.memCopy(MemoryUtil.memAddress(memoryBuffer), mappedMemoryBuffer.get(0), ((int)ValueLayout.JAVA_FLOAT.byteSize() * (2 + 3)) * vertices.length);
+		ByRef<Long> byrefVertexBuffer = new ByRef<>();
+		ByRef<Long> byrefVertexBufferMemory = new ByRef<>();
 		
-		vkUnmapMemory(device, vertexBufferMemory);
+		createBuffer(Vertex.byteSize() * vertices.length, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, byrefVertexBuffer, byrefVertexBufferMemory, stack);
+		
+		vertexBuffer = byrefVertexBuffer.value;
+		vertexBufferMemory = byrefVertexBufferMemory.value;
+		
+		copyBuffer(stagingBuffer, vertexBuffer, Vertex.byteSize() * vertices.length, stack);
+	}
+	
+	public void copyBuffer(long srcBuffer, long dstBuffer, int size, MemoryStack stack)
+	{
+		VkCommandBufferAllocateInfo commandBufferAllocateInfo = VkCommandBufferAllocateInfo.calloc(stack);
+		commandBufferAllocateInfo.sType$Default();
+		commandBufferAllocateInfo.level(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+		commandBufferAllocateInfo.commandPool(commandPool);
+		commandBufferAllocateInfo.commandBufferCount(1);
+		
+		VkCommandBuffer cmdBuffer = Utils.allocateCommandBuffer(device, commandBufferAllocateInfo, stack);
+		
+		VkCommandBufferBeginInfo commandBufferBeginInfo = VkCommandBufferBeginInfo.calloc(stack);
+		commandBufferBeginInfo.sType$Default();
+		commandBufferBeginInfo.flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+		
+		vkBeginCommandBuffer(cmdBuffer, commandBufferBeginInfo);
+		
+		VkBufferCopy.Buffer bufferCopy = VkBufferCopy.calloc(1, stack);
+		bufferCopy.srcOffset(0);
+		bufferCopy.dstOffset(0);
+		bufferCopy.size(size);
+		
+		vkCmdCopyBuffer(cmdBuffer, srcBuffer, dstBuffer, bufferCopy);
+		
+		vkEndCommandBuffer(cmdBuffer);
+		
+		VkSubmitInfo submitInfo = VkSubmitInfo.calloc(stack);
+		submitInfo.sType$Default();
+		submitInfo.pCommandBuffers(stack.pointers(cmdBuffer));
+		
+		vkQueueSubmit(graphicsQueue, submitInfo, VK_NULL_HANDLE);
+		
+		vkQueueWaitIdle(graphicsQueue);
+		
+		vkFreeCommandBuffers(device, commandPool, stack.pointers(cmdBuffer));
+	}
+	
+	public void createBuffer(long size, int usage, int properties, ByRef<Long> buffer, ByRef<Long> bufferMemory, MemoryStack stack)
+	{
+		VkBufferCreateInfo bufferCreateInfo = VkBufferCreateInfo.calloc(stack);
+		bufferCreateInfo.sType$Default();
+		bufferCreateInfo.size(size);
+		bufferCreateInfo.usage(usage);
+		bufferCreateInfo.sharingMode(VK_SHARING_MODE_EXCLUSIVE);
+		
+		long newBuffer = Utils.createBuffer(device, bufferCreateInfo, stack);
+		
+		VkMemoryRequirements memoryRequirements = VkMemoryRequirements.calloc(stack);
+		
+		vkGetBufferMemoryRequirements(device, newBuffer, memoryRequirements);
+		
+		VkMemoryAllocateInfo memoryAllocateInfo = VkMemoryAllocateInfo.calloc(stack);
+		memoryAllocateInfo.sType$Default();
+		memoryAllocateInfo.allocationSize(memoryRequirements.size());
+		memoryAllocateInfo.memoryTypeIndex(findMemoryType(memoryRequirements.memoryTypeBits(), properties, stack));
+		
+		LongBuffer memoryBuffer = stack.mallocLong(1);
+		
+		vkAllocateMemory(device, memoryAllocateInfo, null, memoryBuffer);
+		
+		long newBufferMemory = memoryBuffer.get(0);
+		
+		vkBindBufferMemory(device, newBuffer, newBufferMemory, 0);
+		
+		buffer.value = newBuffer;
+		bufferMemory.value = newBufferMemory;
 	}
 	
 	public int findMemoryType(int typeFilter, int properties, MemoryStack stack)
@@ -901,9 +963,14 @@ public class Engine
 		Vector2f pos;
 		Vector3f color;
 		
-		public int byteSize()
+		public static int byteSize()
 		{
-			return 0;
+			return (int)ValueLayout.JAVA_FLOAT.byteSize() * floatSize();
+		}
+		
+		public static int floatSize()
+		{
+			return 2 + 3;
 		}
 		
 		public Vertex(Vector2f pos, Vector3f color)
