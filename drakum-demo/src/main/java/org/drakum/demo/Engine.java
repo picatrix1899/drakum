@@ -10,6 +10,7 @@ import java.lang.foreign.ValueLayout;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
 import java.nio.LongBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -137,16 +138,19 @@ public class Engine
 	private long inFlightFence;
 
 	private Vertex[] vertices = new Vertex[] {
-		new Vertex(new Vector2f(0.0f, -0.5f), new Vector3f(1.0f, 0.0f, 0.0f)),	
-		new Vertex(new Vector2f(0.5f, 0.5f), new Vector3f(0.0f, 1.0f, 0.0f)),	
-		new Vertex(new Vector2f(-0.5f, 0.5f), new Vector3f(0.0f, 0.0f, 1.0f)),	
+		new Vertex(new Vector2f(-0.5f, -0.5f), new Vector3f(1.0f, 0.0f, 0.0f)),	
+		new Vertex(new Vector2f(0.5f, -0.5f), new Vector3f(0.0f, 1.0f, 0.0f)),	
+		new Vertex(new Vector2f(0.5f, 0.5f), new Vector3f(0.0f, 0.0f, 1.0f)),	
+		new Vertex(new Vector2f(-0.5f, 0.5f), new Vector3f(1.0f, 1.0f, 1.0f)),	
 	};
+	
+	private int[] indices = new int[] {0, 1, 2, 2, 3, 0};
 	
 	private long vertexBuffer;
 	private long vertexBufferMemory;
 	
-	private long stagingBuffer;
-	private long stagingBufferMemory;
+	private long indexBuffer;
+	private long indexBufferMemory;
 	
 	public void start()
 	{
@@ -175,6 +179,7 @@ public class Engine
 			createSyncObjects(stack);
 
 			createVertextBuffer(stack);
+			createIndexBuffer(stack);
 			
 			glfwShowWindow(window);
 		}
@@ -733,7 +738,9 @@ public class Engine
 			
 			vkCmdBindVertexBuffers(commandBuffer, 0, vertexBuffers, offsets);
 			
-			vkCmdDraw(commandBuffer, vertices.length, 1, 0, 0);
+			vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+			
+			vkCmdDrawIndexed(commandBuffer, indices.length, 1, 0, 0, 0);
 
 			vkCmdEndRenderPass(commandBuffer);
 
@@ -758,11 +765,11 @@ public class Engine
 
 	public void __release()
 	{
+		vkDestroyBuffer(device, indexBuffer, null);
+		vkFreeMemory(device, indexBufferMemory, null);
+		
 		vkDestroyBuffer(device, vertexBuffer, null);
 		vkFreeMemory(device, vertexBufferMemory, null);
-		
-		vkDestroyBuffer(device, stagingBuffer, null);
-		vkFreeMemory(device, stagingBufferMemory, null);
 		
 		vkDestroySemaphore(device, imageAvailableSemaphore, null);
 		vkDestroySemaphore(device, renderFinishedSemaphore, null);
@@ -843,8 +850,8 @@ public class Engine
 		
 		createBuffer(Vertex.byteSize() * vertices.length, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, byrefStagingBuffer, byrefStagingBufferMemory, stack);
 		
-		stagingBuffer = byrefStagingBuffer.value;
-		stagingBufferMemory = byrefStagingBufferMemory.value;
+		long stagingBuffer = byrefStagingBuffer.value;
+		long stagingBufferMemory = byrefStagingBufferMemory.value;
 		
 		PointerBuffer mappedMemoryBuffer = stack.mallocPointer(1);
 		
@@ -872,6 +879,9 @@ public class Engine
 		vertexBufferMemory = byrefVertexBufferMemory.value;
 		
 		copyBuffer(stagingBuffer, vertexBuffer, Vertex.byteSize() * vertices.length, stack);
+		
+		vkDestroyBuffer(device, stagingBuffer, null);
+		vkFreeMemory(device, stagingBufferMemory, null);
 	}
 	
 	public void copyBuffer(long srcBuffer, long dstBuffer, int size, MemoryStack stack)
@@ -956,6 +966,39 @@ public class Engine
 		}
 		
 		throw new Error();
+	}
+	
+	public void createIndexBuffer(MemoryStack stack)
+	{
+		ByRef<Long> byrefStagingBuffer = new ByRef<>();
+		ByRef<Long> byrefStagingBufferMemory = new ByRef<>();
+		
+		createBuffer(4 * indices.length, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, byrefStagingBuffer, byrefStagingBufferMemory, stack);
+		
+		long stagingBuffer = byrefStagingBuffer.value;
+		long stagingBufferMemory = byrefStagingBufferMemory.value;
+		
+		PointerBuffer mappedMemoryBuffer = stack.mallocPointer(1);
+		
+		vkMapMemory(device, stagingBufferMemory, 0, 4 * indices.length, 0, mappedMemoryBuffer);
+		
+		IntBuffer intMappedMemory = MemoryUtil.memIntBuffer(mappedMemoryBuffer.get(0), indices.length);
+		intMappedMemory.put(indices);
+		
+		vkUnmapMemory(device, stagingBufferMemory);
+		
+		ByRef<Long> byrefIndexBuffer = new ByRef<>();
+		ByRef<Long> byrefIndexBufferMemory = new ByRef<>();
+		
+		createBuffer(4 * indices.length, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, byrefIndexBuffer, byrefIndexBufferMemory, stack);
+		
+		indexBuffer = byrefIndexBuffer.value;
+		indexBufferMemory = byrefIndexBufferMemory.value;
+		
+		copyBuffer(stagingBuffer, indexBuffer, 4 * indices.length, stack);
+		
+		vkDestroyBuffer(device, stagingBuffer, null);
+		vkFreeMemory(device, stagingBufferMemory, null);
 	}
 	
 	public static class Vertex
