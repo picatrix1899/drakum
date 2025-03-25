@@ -9,9 +9,9 @@ subprojects {
   }
   
   dependencies {
-    testImplementation 'org.mockito:mockito-core:5.11.0'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.3'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.3'
+    testImplementation "org.mockito:mockito-core:$mockitoVersion"
+    testImplementation "org.junit.jupiter:junit-jupiter-api:$junitJupiterVersion"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junitJupiterVersion"
   }
   
   java {
@@ -19,17 +19,17 @@ subprojects {
     withSourcesJar()
 	
 	toolchain {
-        languageVersion = JavaLanguageVersion.of(23)
+        languageVersion = JavaLanguageVersion.of(project.ext.targetJavaVersion)
     }
 	
-	sourceCompatibility = '23'
-    targetCompatibility = '23'
+	sourceCompatibility = "$targetJavaVersion"
+    targetCompatibility = "$targetJavaVersion"
   }
   
   testing {
     suites {
       test {
-        useJUnitJupiter('5.9.3')
+        useJUnitJupiter('$junitJupiterVersion')
       }
     }
   }
@@ -42,15 +42,15 @@ subprojects {
   compileJava {
 	options.encoding = "UTF-8"
 	
-	sourceCompatibility = '23'
-    targetCompatibility = '23'
+	sourceCompatibility = "$targetJavaVersion"
+    targetCompatibility = "$targetJavaVersion"
   }
   
   compileTestJava {
 	options.encoding = "UTF-8"
 	
-	sourceCompatibility = '23'
-    targetCompatibility = '23'
+	sourceCompatibility = "$targetJavaVersion"
+    targetCompatibility = "$targetJavaVersion"
   }
   
   tasks.withType(JavaCompile).configureEach {
@@ -82,8 +82,8 @@ subprojects {
     }
   
     jdt {
-      sourceCompatibility = '23'
-      targetCompatibility = '23'
+      sourceCompatibility = "$targetJavaVersion"
+      targetCompatibility = "$targetJavaVersion"
       javaRuntimeName = 'JavaSE-23'
     }
   

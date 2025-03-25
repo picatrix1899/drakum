@@ -14,6 +14,7 @@ import java.nio.LongBuffer;
 
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.vulkan.VkBufferCreateInfo;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkCommandBufferAllocateInfo;
 import org.lwjgl.vulkan.VkCommandPoolCreateInfo;
@@ -279,6 +280,15 @@ public class Utils
 		IntBuffer buf = stack.callocInt(1);
 		
 		vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE, semaphore, VK_NULL_HANDLE, buf);
+		
+		return buf.get(0);
+	}
+	
+	public static long createBuffer(VkDevice device, VkBufferCreateInfo createInfo, MemoryStack stack)
+	{
+		LongBuffer buf = stack.callocLong(1);
+		
+		vkCreateBuffer(device, createInfo, null, buf);
 		
 		return buf.get(0);
 	}
