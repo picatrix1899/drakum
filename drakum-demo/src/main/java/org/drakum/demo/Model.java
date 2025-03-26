@@ -14,9 +14,6 @@ import org.lwjgl.vulkan.VkBufferCopy;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkCommandBufferAllocateInfo;
 import org.lwjgl.vulkan.VkCommandBufferBeginInfo;
-import org.lwjgl.vulkan.VkDevice;
-import org.lwjgl.vulkan.VkPhysicalDevice;
-import org.lwjgl.vulkan.VkQueue;
 import org.lwjgl.vulkan.VkSubmitInfo;
 import org.lwjgl.vulkan.VkVertexInputAttributeDescription;
 import org.lwjgl.vulkan.VkVertexInputBindingDescription;
@@ -35,11 +32,11 @@ public class Model
 	public VulkanBuffer vertexBuffer;
 	public VulkanBuffer indexBuffer;
 	
-	public void createVertexBuffer(VkDevice device, VkPhysicalDevice physicalDevice, long commandPool, VkQueue graphicsQueue, MemoryStack stack)
+	public void createVertexBuffer(GPU gpu, long commandPool, MemoryStack stack)
 	{
-		VulkanBuffer stagingBuffer = createBuffer(device, physicalDevice, Vertex.byteSize() * vertices.length, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stack);
+		VulkanBuffer stagingBuffer = createBuffer(gpu, Vertex.byteSize() * vertices.length, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stack);
 		
-		long mappedMemoryAddress = Utils.mapMemory(device, stagingBuffer.bufferMemory, 0, Vertex.byteSize() * vertices.length, 0, stack);
+		long mappedMemoryAddress = Utils.mapMemory(gpu.device, stagingBuffer.bufferMemory, 0, Vertex.byteSize() * vertices.length, 0, stack);
 		
 		FloatBuffer floatMappedMemory = MemoryUtil.memFloatBuffer(mappedMemoryAddress, Vertex.floatSize() * vertices.length);
 		
@@ -52,16 +49,16 @@ public class Model
 			floatMappedMemory.put(v.color.z);
 		}
 		
-		vkUnmapMemory(device, stagingBuffer.bufferMemory);
+		vkUnmapMemory(gpu.device, stagingBuffer.bufferMemory);
 
-		vertexBuffer = createBuffer(device, physicalDevice, Vertex.byteSize() * vertices.length, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, stack);
+		vertexBuffer = createBuffer(gpu, Vertex.byteSize() * vertices.length, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, stack);
 
-		copyBuffer(device, commandPool, stagingBuffer.buffer, vertexBuffer.buffer, Vertex.byteSize() * vertices.length, graphicsQueue, stack);
+		copyBuffer(gpu, commandPool, stagingBuffer.buffer, vertexBuffer.buffer, Vertex.byteSize() * vertices.length, stack);
 		
-		stagingBuffer.__release(device);
+		stagingBuffer.__release(gpu.device);
 	}
 	
-	public void copyBuffer(VkDevice device, long commandPool, long srcBuffer, long dstBuffer, int size, VkQueue graphicsQueue, MemoryStack stack)
+	public void copyBuffer(GPU gpu, long commandPool, long srcBuffer, long dstBuffer, int size, MemoryStack stack)
 	{
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo = VkCommandBufferAllocateInfo.calloc(stack);
 		commandBufferAllocateInfo.sType$Default();
@@ -69,7 +66,7 @@ public class Model
 		commandBufferAllocateInfo.commandPool(commandPool);
 		commandBufferAllocateInfo.commandBufferCount(1);
 		
-		VkCommandBuffer cmdBuffer = Utils.allocateCommandBuffer(device, commandBufferAllocateInfo, stack);
+		VkCommandBuffer cmdBuffer = Utils.allocateCommandBuffer(gpu.device, commandBufferAllocateInfo, stack);
 		
 		VkCommandBufferBeginInfo commandBufferBeginInfo = VkCommandBufferBeginInfo.calloc(stack);
 		commandBufferBeginInfo.sType$Default();
@@ -90,44 +87,43 @@ public class Model
 		submitInfo.sType$Default();
 		submitInfo.pCommandBuffers(stack.pointers(cmdBuffer));
 		
-		vkQueueSubmit(graphicsQueue, submitInfo, VK_NULL_HANDLE);
+		vkQueueSubmit(gpu.graphicsQueue, submitInfo, VK_NULL_HANDLE);
 		
-		vkQueueWaitIdle(graphicsQueue);
+		vkQueueWaitIdle(gpu.graphicsQueue);
 		
-		vkFreeCommandBuffers(device, commandPool, stack.pointers(cmdBuffer));
+		vkFreeCommandBuffers(gpu.device, commandPool, stack.pointers(cmdBuffer));
 	}
 	
-	public VulkanBuffer createBuffer(VkDevice device, VkPhysicalDevice physicalDevice, long size, int usage, int properties, MemoryStack stack)
+	public VulkanBuffer createBuffer(GPU gpu, long size, int usage, int properties, MemoryStack stack)
 	{
 		VulkanBuffer buffer = new VulkanBuffer();
-		buffer.createBuffer(device, physicalDevice, size, usage, VK_SHARING_MODE_EXCLUSIVE, properties);
+		buffer.createBuffer(gpu, size, usage, VK_SHARING_MODE_EXCLUSIVE, properties);
 		
 		return buffer;
 	}
 	
-	public void createIndexBuffer(VkDevice device, VkPhysicalDevice physicalDevice, long commandPool, VkQueue graphicsQueue, MemoryStack stack)
+	public void createIndexBuffer(GPU gpu, long commandPool, MemoryStack stack)
 	{
-		VulkanBuffer stagingBuffer = createBuffer(device, physicalDevice, 4 * indices.length, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stack);
+		VulkanBuffer stagingBuffer = createBuffer(gpu, 4 * indices.length, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stack);
 		
-		long mappedMemoryAddress = Utils.mapMemory(device, stagingBuffer.bufferMemory, 0, 4 * indices.length, 0, stack);
+		long mappedMemoryAddress = Utils.mapMemory(gpu.device, stagingBuffer.bufferMemory, 0, 4 * indices.length, 0, stack);
 
 		IntBuffer intMappedMemory = MemoryUtil.memIntBuffer(mappedMemoryAddress, indices.length);
 		intMappedMemory.put(indices);
 		
-		vkUnmapMemory(device, stagingBuffer.bufferMemory);
+		vkUnmapMemory(gpu.device, stagingBuffer.bufferMemory);
 
-		indexBuffer = createBuffer(device, physicalDevice, 4 * indices.length, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, stack);
+		indexBuffer = createBuffer(gpu, 4 * indices.length, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, stack);
 
-		copyBuffer(device, commandPool, stagingBuffer.buffer, indexBuffer.buffer, 4 * indices.length, graphicsQueue, stack);
+		copyBuffer(gpu, commandPool, stagingBuffer.buffer, indexBuffer.buffer, 4 * indices.length, stack);
 		
-		stagingBuffer.__release(device);
+		stagingBuffer.__release(gpu.device);
 	}
 	
-	public void __release(VkDevice device)
+	public void __release(GPU gpu)
 	{
-		indexBuffer.__release(device);
-		
-		vertexBuffer.__release(device);
+		indexBuffer.__release(gpu.device);
+		vertexBuffer.__release(gpu.device);
 	}
 	
 	

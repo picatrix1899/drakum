@@ -7,15 +7,13 @@ import org.lwjgl.vulkan.VkBufferCreateInfo;
 import org.lwjgl.vulkan.VkDevice;
 import org.lwjgl.vulkan.VkMemoryAllocateInfo;
 import org.lwjgl.vulkan.VkMemoryRequirements;
-import org.lwjgl.vulkan.VkPhysicalDevice;
-import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties;
 
 public class VulkanBuffer
 {
 	public long buffer;
 	public long bufferMemory;
 	
-	public void createBuffer(VkDevice device, VkPhysicalDevice physicalDevice, long size, int usage, int sharingMode, int properties)
+	public void createBuffer(GPU gpu, long size, int usage, int sharingMode, int properties)
 	{
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
@@ -25,38 +23,21 @@ public class VulkanBuffer
 			bufferCreateInfo.usage(usage);
 			bufferCreateInfo.sharingMode(sharingMode);
 			
-			this.buffer = Utils.createBuffer(device, bufferCreateInfo, stack);
+			this.buffer = Utils.createBuffer(gpu.device, bufferCreateInfo, stack);
 			
 			VkMemoryRequirements memoryRequirements = VkMemoryRequirements.calloc(stack);
 			
-			vkGetBufferMemoryRequirements(device, buffer, memoryRequirements);
+			vkGetBufferMemoryRequirements(gpu.device, buffer, memoryRequirements);
 			
 			VkMemoryAllocateInfo memoryAllocateInfo = VkMemoryAllocateInfo.calloc(stack);
 			memoryAllocateInfo.sType$Default();
 			memoryAllocateInfo.allocationSize(memoryRequirements.size());
-			memoryAllocateInfo.memoryTypeIndex(findMemoryType(memoryRequirements.memoryTypeBits(), properties, physicalDevice, stack));
+			memoryAllocateInfo.memoryTypeIndex(gpu.findMemoryType(memoryRequirements.memoryTypeBits(), properties, stack));
 			
-			this.bufferMemory = Utils.allocateMemory(device, memoryAllocateInfo, stack);
+			this.bufferMemory = Utils.allocateMemory(gpu.device, memoryAllocateInfo, stack);
 			
-			vkBindBufferMemory(device, buffer, bufferMemory, 0);
+			vkBindBufferMemory(gpu.device, buffer, bufferMemory, 0);
 		}
-	}
-	
-	public int findMemoryType(int typeFilter, int properties, VkPhysicalDevice physicalDevice, MemoryStack stack)
-	{
-		VkPhysicalDeviceMemoryProperties memoryProperties = VkPhysicalDeviceMemoryProperties.calloc(stack);
-		
-		vkGetPhysicalDeviceMemoryProperties(physicalDevice, memoryProperties);
-		
-		for(int i = 0; i < memoryProperties.memoryTypeCount(); i++)
-		{
-			if((typeFilter & (1 << i)) != 0 && (memoryProperties.memoryTypes(i).propertyFlags() & properties) == properties)
-			{
-				return i;
-			}
-		}
-		
-		throw new Error();
 	}
 	
 	public void __release(VkDevice device)

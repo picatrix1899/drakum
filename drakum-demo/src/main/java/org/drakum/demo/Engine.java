@@ -46,9 +46,6 @@ import org.lwjgl.vulkan.VkDescriptorPoolSize;
 import org.lwjgl.vulkan.VkDescriptorSetAllocateInfo;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutBinding;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutCreateInfo;
-import org.lwjgl.vulkan.VkDevice;
-import org.lwjgl.vulkan.VkDeviceCreateInfo;
-import org.lwjgl.vulkan.VkDeviceQueueCreateInfo;
 import org.lwjgl.vulkan.VkExtent2D;
 import org.lwjgl.vulkan.VkFenceCreateInfo;
 import org.lwjgl.vulkan.VkGraphicsPipelineCreateInfo;
@@ -72,8 +69,6 @@ import org.lwjgl.vulkan.VkPipelineShaderStageCreateInfo;
 import org.lwjgl.vulkan.VkPipelineVertexInputStateCreateInfo;
 import org.lwjgl.vulkan.VkPipelineViewportStateCreateInfo;
 import org.lwjgl.vulkan.VkPresentInfoKHR;
-import org.lwjgl.vulkan.VkQueue;
-import org.lwjgl.vulkan.VkQueueFamilyProperties;
 import org.lwjgl.vulkan.VkRect2D;
 import org.lwjgl.vulkan.VkRenderPassBeginInfo;
 import org.lwjgl.vulkan.VkRenderPassCreateInfo;
@@ -90,29 +85,12 @@ import org.lwjgl.vulkan.VkWriteDescriptorSet;
 
 public class Engine
 {
-	private static final VkDebugUtilsMessengerCallbackEXT DEBUG_CALLBACK = new VkDebugUtilsMessengerCallbackEXT() {
-		@Override
-		public int invoke(int messageSeverity, int messageType, long pCallbackData, long pUserData)
-		{
-			VkDebugUtilsMessengerCallbackDataEXT callbackData = VkDebugUtilsMessengerCallbackDataEXT.create(pCallbackData);
-			System.err.println("Vulkan Debug [" + messageSeverity + "]: " + callbackData.pMessageString());
-			return VK_FALSE; // Nicht Vulkan beenden
-		}
-	};
-
+	private VulkanInstance vkInstance;
+	
 	private GPU gpu;
 	
-	private VkInstance vkInstance = null;
-	private PointerBuffer glfwExtensions;
-	private PointerBuffer enabledLayers;
-	private long debugMessenger = 0;
 	private long window = 0;
 	private long surface = 0;
-	
-	private QueueFamilyList queueFamilies;
-
-	private VkQueue graphicsQueue = null;
-	private VkQueue presentQueue = null;
 	
 	private long vertexShaderModule;
 	private long fragmentShaderModule;
@@ -163,10 +141,17 @@ public class Engine
 
 		try (MemoryStack stack = MemoryStack.stackPush())
 		{
-			initVulkanInstance(stack);
-			initDebugMessenger(vkInstance, stack);
+			vkInstance = new VulkanInstance.Builder()
+				.applicationName("Drakum Demo")
+				.engineName("Drakum")
+				.debugMode(true)
+				.create();
+			
 			initSurface(stack);
-			initDevice(stack);
+
+			gpu = new GPU();
+			gpu.initDevice(vkInstance.handle(), surface, stack);
+			
 			createRenderPass(stack);
 			initSwapchain(stack);
 			createDescriptorSetLayout(stack);
@@ -175,8 +160,8 @@ public class Engine
 			createSyncObjects(stack);
 
 			model = new Model();
-			model.createVertexBuffer(gpu.device, gpu.physicalDevice, commandPool, graphicsQueue, stack);
-			model.createIndexBuffer(gpu.device, gpu.physicalDevice, commandPool, graphicsQueue, stack);
+			model.createVertexBuffer(gpu, commandPool, stack);
+			model.createIndexBuffer(gpu, commandPool, stack);
 
 			initUniformBuffers(stack);
 			createDescriptorPool(stack);
@@ -307,126 +292,9 @@ public class Engine
 		}
 	}
 
-	private void initVulkanInstance(MemoryStack stack)
-	{
-		VkApplicationInfo appInfo = VkApplicationInfo.calloc(stack);
-		appInfo.sType$Default();
-		appInfo.pApplicationName(stack.UTF8("Drakum Demo"));
-		appInfo.applicationVersion(VK_MAKE_VERSION(1, 0, 0));
-		appInfo.pEngineName(stack.UTF8("Drakum"));
-		appInfo.engineVersion(VK_MAKE_VERSION(1, 0, 0));
-		appInfo.apiVersion(VK_API_VERSION_1_4);
-
-		glfwExtensions = glfwGetRequiredInstanceExtensions();
-
-		PointerBuffer enabledExtensions = MemoryUtil.memAllocPointer(glfwExtensions.remaining() + 1);
-		enabledExtensions.put(glfwExtensions);
-		enabledExtensions.put(stack.UTF8(VK_EXT_DEBUG_UTILS_EXTENSION_NAME));
-		enabledExtensions.flip();
-
-		enabledLayers = stack.mallocPointer(1);
-		enabledLayers.put(stack.UTF8("VK_LAYER_KHRONOS_validation"));
-		enabledLayers.flip();
-
-		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = VkDebugUtilsMessengerCreateInfoEXT.calloc();
-		debugCreateInfo.sType$Default();
-		debugCreateInfo.messageSeverity(EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT);
-		debugCreateInfo.messageType(EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT);
-		debugCreateInfo.pfnUserCallback(DEBUG_CALLBACK);
-
-		VkInstanceCreateInfo vkInstanceCreateInfo = VkInstanceCreateInfo.calloc(stack);
-		vkInstanceCreateInfo.sType$Default();
-		vkInstanceCreateInfo.pApplicationInfo(appInfo);
-		vkInstanceCreateInfo.ppEnabledExtensionNames(enabledExtensions);
-		vkInstanceCreateInfo.ppEnabledLayerNames(enabledLayers);
-		vkInstanceCreateInfo.pNext(debugCreateInfo);
-
-		vkInstance = Utils.createInstance(vkInstanceCreateInfo, stack);
-	}
-
 	private void initSurface(MemoryStack stack)
 	{
-		surface = Utils.createWindowSurface(vkInstance, window, stack);
-	}
-
-	private void initDevice(MemoryStack stack)
-	{
-		gpu = new GPU();
-		
-		VkPhysicalDevice[] physicalDevices = Utils.enumeratePhysicalDevices(vkInstance, stack);
-
-		for (VkPhysicalDevice physDevice : physicalDevices)
-		{
-			if (isDeviceSuitable(physDevice, stack))
-			{
-				gpu.physicalDevice = physDevice;
-
-				break;
-			}
-		}
-
-		VkQueueFamilyProperties[] familyPropertiesArray = Utils.getPhysicalDeviceQueueFamilyProperties(gpu.physicalDevice, stack);
-
-		queueFamilies = new QueueFamilyList();
-		
-		for (int i = 0; i < familyPropertiesArray.length; i++)
-		{
-			VkQueueFamilyProperties familyProperties = familyPropertiesArray[i];
-
-			if ((familyProperties.queueFlags() & (VK_QUEUE_GRAPHICS_BIT)) > 0)
-			{
-				queueFamilies.graphicsFamily = i;
-			}
-
-			if (Utils.getPhysicalDeviceSurfaceSupportKHR(gpu.physicalDevice, i, surface, stack))
-			{
-				queueFamilies.presentFamily = i;
-			}
-
-			if (queueFamilies.graphicsFamily > 1 && queueFamilies.presentFamily > 1)
-			{
-				break;
-			}
-
-			i++;
-		}
-
-		if (queueFamilies.graphicsFamily == -1)
-		{
-			throw new Error("Cannot find graphics family");
-		}
-
-		if (queueFamilies.presentFamily == -1)
-		{
-			throw new Error("Cannot find present family");
-		}
-
-		VkDeviceQueueCreateInfo.Buffer queueCreateInfo = VkDeviceQueueCreateInfo.calloc(2, stack);
-		queueCreateInfo.get(0).sType$Default();
-		queueCreateInfo.get(0).queueFamilyIndex(queueFamilies.graphicsFamily);
-		queueCreateInfo.get(0).pQueuePriorities(stack.floats(1.0f));
-
-		queueCreateInfo.get(1).sType$Default();
-		queueCreateInfo.get(1).queueFamilyIndex(queueFamilies.presentFamily);
-		queueCreateInfo.get(1).pQueuePriorities(stack.floats(1.0f));
-
-		VkPhysicalDeviceFeatures physicalDeviceFeatures = VkPhysicalDeviceFeatures.calloc(stack);
-
-		PointerBuffer deviceExtensions = stack.mallocPointer(glfwExtensions.remaining() + 1);
-		deviceExtensions.put(stack.UTF8(VK_KHR_SWAPCHAIN_EXTENSION_NAME));
-		deviceExtensions.flip();
-
-		VkDeviceCreateInfo deviceCreateInfo = VkDeviceCreateInfo.calloc(stack);
-		deviceCreateInfo.sType$Default();
-		deviceCreateInfo.pQueueCreateInfos(queueCreateInfo);
-		deviceCreateInfo.pEnabledFeatures(physicalDeviceFeatures);
-		deviceCreateInfo.ppEnabledLayerNames(enabledLayers);
-		deviceCreateInfo.ppEnabledExtensionNames(deviceExtensions);
-
-		gpu.device = Utils.createDevice(deviceCreateInfo, gpu.physicalDevice, stack);
-
-		graphicsQueue = Utils.getDeviceQueue(gpu.device, queueFamilies.graphicsFamily, 0, stack);
-		presentQueue = Utils.getDeviceQueue(gpu.device, queueFamilies.presentFamily, 0, stack);
+		surface = Utils.createWindowSurface(vkInstance.handle(), window, stack);
 	}
 
 	private void initSwapchain(MemoryStack stack)
@@ -449,7 +317,7 @@ public class Engine
 		swapchainImageCount = imageCount;
 		
 		swapchain = new Swapchain();
-		swapchain.create(surfaceCapabilities, actualExtent.width(), actualExtent.height(), gpu.device, surface, queueFamilies, renderPass, swapchainImageCount);
+		swapchain.create(surfaceCapabilities, actualExtent.width(), actualExtent.height(), gpu.device, surface, gpu.queueFamilies, renderPass, swapchainImageCount);
 	}
 
 	public void initGraphicsPipeline(MemoryStack stack)
@@ -648,7 +516,7 @@ public class Engine
 		VkCommandPoolCreateInfo commandPoolCreateInfo = VkCommandPoolCreateInfo.calloc(stack);
 		commandPoolCreateInfo.sType$Default();
 		commandPoolCreateInfo.flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-		commandPoolCreateInfo.queueFamilyIndex(queueFamilies.graphicsFamily);
+		commandPoolCreateInfo.queueFamilyIndex(gpu.queueFamilies.graphicsFamily);
 
 		commandPool = Utils.createCommandPool(gpu.device, commandPoolCreateInfo, stack);
 
@@ -702,7 +570,7 @@ public class Engine
 			submitInfo.pCommandBuffers(stack.pointers(commandBuffer));
 			submitInfo.pSignalSemaphores(stack.longs(renderFinishedSemaphore));
 
-			vkQueueSubmit(graphicsQueue, submitInfo, inFlightFence);
+			vkQueueSubmit(gpu.graphicsQueue, submitInfo, inFlightFence);
 
 			VkPresentInfoKHR presentInfo = VkPresentInfoKHR.calloc(stack);
 			presentInfo.sType$Default();
@@ -711,7 +579,7 @@ public class Engine
 			presentInfo.pSwapchains(stack.longs(swapchain.swapchain));
 			presentInfo.pImageIndices(stack.ints(imageIndex));
 
-			vkQueuePresentKHR(presentQueue, presentInfo);
+			vkQueuePresentKHR(gpu.presentQueue, presentInfo);
 		}
 	}
 
@@ -829,7 +697,7 @@ public class Engine
 
 	public void __release()
 	{
-		model.__release(gpu.device);
+		model.__release(gpu);
 
 		vkDestroySemaphore(gpu.device, imageAvailableSemaphore, null);
 		vkDestroySemaphore(gpu.device, renderFinishedSemaphore, null);
@@ -860,46 +728,15 @@ public class Engine
 
 		framebufferExtent.free();
 
-		vkDestroySurfaceKHR(vkInstance, surface, null);
+		vkDestroySurfaceKHR(vkInstance.handle(), surface, null);
 
-		vkDestroyDevice(gpu.device, null);
+		gpu.__release();
 
-		EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT(vkInstance, debugMessenger, null);
-
-		vkDestroyInstance(vkInstance, null);
-
+		vkInstance.__release();
+		
 		glfwDestroyWindow(window);
 
 		glfwTerminate();
-	}
-
-	private void initDebugMessenger(VkInstance instance, MemoryStack stack)
-	{
-		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = VkDebugUtilsMessengerCreateInfoEXT.calloc();
-		debugCreateInfo.sType$Default();
-		debugCreateInfo.messageSeverity(EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT);
-		debugCreateInfo.messageType(EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT);
-		debugCreateInfo.pfnUserCallback(DEBUG_CALLBACK);
-
-		LongBuffer pMessenger = stack.mallocLong(1);
-
-		if (EXTDebugUtils.vkCreateDebugUtilsMessengerEXT(instance, debugCreateInfo, null, pMessenger) != VK_SUCCESS)
-		{
-			throw new RuntimeException("Fehler beim Erstellen des Vulkan Debug Messengers.");
-		}
-
-		this.debugMessenger = pMessenger.get(0);
-	}
-
-	public boolean isDeviceSuitable(VkPhysicalDevice device, MemoryStack stack)
-	{
-		VkPhysicalDeviceProperties deviceProperties = VkPhysicalDeviceProperties.calloc(stack);
-		VkPhysicalDeviceFeatures deviceFeatures = VkPhysicalDeviceFeatures.calloc(stack);
-
-		vkGetPhysicalDeviceProperties(device, deviceProperties);
-		vkGetPhysicalDeviceFeatures(device, deviceFeatures);
-
-		return deviceProperties.deviceType() == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader();
 	}
 	
 	public void copyBuffer(long srcBuffer, long dstBuffer, int size, MemoryStack stack)
@@ -931,9 +768,9 @@ public class Engine
 		submitInfo.sType$Default();
 		submitInfo.pCommandBuffers(stack.pointers(cmdBuffer));
 		
-		vkQueueSubmit(graphicsQueue, submitInfo, VK_NULL_HANDLE);
+		vkQueueSubmit(gpu.graphicsQueue, submitInfo, VK_NULL_HANDLE);
 		
-		vkQueueWaitIdle(graphicsQueue);
+		vkQueueWaitIdle(gpu.graphicsQueue);
 		
 		vkFreeCommandBuffers(gpu.device, commandPool, stack.pointers(cmdBuffer));
 	}
