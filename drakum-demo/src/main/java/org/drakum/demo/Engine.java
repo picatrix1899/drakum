@@ -5,6 +5,7 @@ import static org.lwjgl.glfw.GLFWVulkan.*;
 import static org.lwjgl.vulkan.VK14.*;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
+import static org.lwjgl.vulkan.VK10.VK_FORMAT_B8G8R8A8_SRGB;
 
 import java.lang.foreign.ValueLayout;
 import java.net.URL;
@@ -40,7 +41,6 @@ import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkCommandBufferAllocateInfo;
 import org.lwjgl.vulkan.VkCommandBufferBeginInfo;
 import org.lwjgl.vulkan.VkCommandPoolCreateInfo;
-import org.lwjgl.vulkan.VkComponentMapping;
 import org.lwjgl.vulkan.VkDebugUtilsMessengerCallbackDataEXT;
 import org.lwjgl.vulkan.VkDebugUtilsMessengerCallbackEXT;
 import org.lwjgl.vulkan.VkDebugUtilsMessengerCreateInfoEXT;
@@ -55,10 +55,7 @@ import org.lwjgl.vulkan.VkDeviceCreateInfo;
 import org.lwjgl.vulkan.VkDeviceQueueCreateInfo;
 import org.lwjgl.vulkan.VkExtent2D;
 import org.lwjgl.vulkan.VkFenceCreateInfo;
-import org.lwjgl.vulkan.VkFramebufferCreateInfo;
 import org.lwjgl.vulkan.VkGraphicsPipelineCreateInfo;
-import org.lwjgl.vulkan.VkImageSubresourceRange;
-import org.lwjgl.vulkan.VkImageViewCreateInfo;
 import org.lwjgl.vulkan.VkInstance;
 import org.lwjgl.vulkan.VkInstanceCreateInfo;
 import org.lwjgl.vulkan.VkMemoryAllocateInfo;
@@ -90,7 +87,6 @@ import org.lwjgl.vulkan.VkSubmitInfo;
 import org.lwjgl.vulkan.VkSubpassDependency;
 import org.lwjgl.vulkan.VkSubpassDescription;
 import org.lwjgl.vulkan.VkSurfaceCapabilitiesKHR;
-import org.lwjgl.vulkan.VkSwapchainCreateInfoKHR;
 import org.lwjgl.vulkan.VkVertexInputAttributeDescription;
 import org.lwjgl.vulkan.VkVertexInputBindingDescription;
 import org.lwjgl.vulkan.VkViewport;
@@ -116,23 +112,13 @@ public class Engine
 	private VkDevice device = null;
 	private long window = 0;
 	private long surface = 0;
-
-	private int graphicsFamily = -1;
-	private int presentFamily = -1;
+	
+	private QueueFamilyList queueFamilies;
 
 	private VkQueue graphicsQueue = null;
 	private VkQueue presentQueue = null;
 	private VkPhysicalDevice physicalDevice = null;
-
-	private int swapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
-	private int swapchainColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-
-	private long swapchain = 0;
-	private long[] swapchainImageViews = null;
-	private long[] swapchainFramebuffers = null;
-	private long[] uniformBuffers = null;
-	private long[] uniformBuffersMemory = null;
-	private long[] uniformBuffersMappedMemory = null;
+	
 	
 	private long vertexShaderModule;
 	private long fragmentShaderModule;
@@ -150,6 +136,11 @@ public class Engine
 	private long renderFinishedSemaphore;
 	private long inFlightFence;
 
+	private int swapchainImageCount;
+	public int swapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
+	public int swapchainColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+	private Swapchain swapchainObj;
+	
 	private Vertex[] vertices = new Vertex[] {
 		new Vertex(new Vector2f(-0.5f, -0.5f), new Vector3f(1.0f, 0.0f, 0.0f)),	
 		new Vertex(new Vector2f(0.5f, -0.5f), new Vector3f(0.0f, 1.0f, 0.0f)),	
@@ -170,8 +161,12 @@ public class Engine
 	private long lastTime;
 	
 	private long descriptorPool;
-	
 	private long[] descriptorSets;
+	private long[] uniformBuffers = null;
+	private long[] uniformBuffersMemory = null;
+	private long[] uniformBuffersMappedMemory = null;
+	
+	
 	
 	public void start()
 	{
@@ -193,10 +188,10 @@ public class Engine
 			initDebugMessenger(vkInstance, stack);
 			initSurface(stack);
 			initDevice(stack);
+			createRenderPass(stack);
 			initSwapchain(stack);
 			createDescriptorSetLayout(stack);
 			initGraphicsPipeline(stack);
-			initSwapchainFramebuffers(stack);
 			initCommandBuffer(stack);
 			createSyncObjects(stack);
 
@@ -214,7 +209,7 @@ public class Engine
 
 	private void createDescriptorSets(MemoryStack stack)
 	{
-		long[] layouts = new long[swapchainImageViews.length];
+		long[] layouts = new long[swapchainImageCount];
 		Arrays.fill(layouts, descriptorSetLayout);
 		
 		VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = VkDescriptorSetAllocateInfo.calloc(stack);
@@ -222,15 +217,15 @@ public class Engine
 		descriptorSetAllocateInfo.descriptorPool(descriptorPool);
 		descriptorSetAllocateInfo.pSetLayouts(stack.longs(layouts));
 		
-		LongBuffer buf = stack.callocLong(swapchainImageViews.length);
+		LongBuffer buf = stack.callocLong(swapchainImageCount);
 		
 		vkAllocateDescriptorSets(device, descriptorSetAllocateInfo, buf);
 		
-		descriptorSets = new long[swapchainImageViews.length];
+		descriptorSets = new long[swapchainImageCount];
 		
 		buf.get(descriptorSets);
 		
-		for(int i = 0; i < swapchainImageViews.length; i++)
+		for(int i = 0; i < swapchainImageCount; i++)
 		{
 			VkDescriptorBufferInfo.Buffer descriptorBufferInfo = VkDescriptorBufferInfo.calloc(1, stack);
 			descriptorBufferInfo.buffer(uniformBuffers[i]);
@@ -254,12 +249,12 @@ public class Engine
 	{
 		VkDescriptorPoolSize.Buffer descriptorPoolSize = VkDescriptorPoolSize.calloc(1, stack);
 		descriptorPoolSize.type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-		descriptorPoolSize.descriptorCount(swapchainImageViews.length);
+		descriptorPoolSize.descriptorCount(swapchainImageCount);
 		
 		VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = VkDescriptorPoolCreateInfo.calloc(stack);
 		descriptorPoolCreateInfo.sType$Default();
 		descriptorPoolCreateInfo.pPoolSizes(descriptorPoolSize);
-		descriptorPoolCreateInfo.maxSets(swapchainImageViews.length);
+		descriptorPoolCreateInfo.maxSets(swapchainImageCount);
 		
 		LongBuffer buf = stack.callocLong(1);
 		
@@ -389,21 +384,23 @@ public class Engine
 
 		VkQueueFamilyProperties[] familyPropertiesArray = Utils.getPhysicalDeviceQueueFamilyProperties(physicalDevice, stack);
 
+		queueFamilies = new QueueFamilyList();
+		
 		for (int i = 0; i < familyPropertiesArray.length; i++)
 		{
 			VkQueueFamilyProperties familyProperties = familyPropertiesArray[i];
 
 			if ((familyProperties.queueFlags() & (VK_QUEUE_GRAPHICS_BIT)) > 0)
 			{
-				graphicsFamily = i;
+				queueFamilies.graphicsFamily = i;
 			}
 
 			if (Utils.getPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, stack))
 			{
-				presentFamily = i;
+				queueFamilies.presentFamily = i;
 			}
 
-			if (graphicsFamily > 1 && presentFamily > 1)
+			if (queueFamilies.graphicsFamily > 1 && queueFamilies.presentFamily > 1)
 			{
 				break;
 			}
@@ -411,23 +408,23 @@ public class Engine
 			i++;
 		}
 
-		if (graphicsFamily == -1)
+		if (queueFamilies.graphicsFamily == -1)
 		{
 			throw new Error("Cannot find graphics family");
 		}
 
-		if (presentFamily == -1)
+		if (queueFamilies.presentFamily == -1)
 		{
 			throw new Error("Cannot find present family");
 		}
 
 		VkDeviceQueueCreateInfo.Buffer queueCreateInfo = VkDeviceQueueCreateInfo.calloc(2, stack);
 		queueCreateInfo.get(0).sType$Default();
-		queueCreateInfo.get(0).queueFamilyIndex(graphicsFamily);
+		queueCreateInfo.get(0).queueFamilyIndex(queueFamilies.graphicsFamily);
 		queueCreateInfo.get(0).pQueuePriorities(stack.floats(1.0f));
 
 		queueCreateInfo.get(1).sType$Default();
-		queueCreateInfo.get(1).queueFamilyIndex(presentFamily);
+		queueCreateInfo.get(1).queueFamilyIndex(queueFamilies.presentFamily);
 		queueCreateInfo.get(1).pQueuePriorities(stack.floats(1.0f));
 
 		VkPhysicalDeviceFeatures physicalDeviceFeatures = VkPhysicalDeviceFeatures.calloc(stack);
@@ -445,8 +442,8 @@ public class Engine
 
 		device = Utils.createDevice(deviceCreateInfo, physicalDevice, stack);
 
-		graphicsQueue = Utils.getDeviceQueue(device, graphicsFamily, 0, stack);
-		presentQueue = Utils.getDeviceQueue(device, presentFamily, 0, stack);
+		graphicsQueue = Utils.getDeviceQueue(device, queueFamilies.graphicsFamily, 0, stack);
+		presentQueue = Utils.getDeviceQueue(device, queueFamilies.presentFamily, 0, stack);
 	}
 
 	private void initSwapchain(MemoryStack stack)
@@ -465,61 +462,11 @@ public class Engine
 		{
 			imageCount = Math.clamp(imageCount, surfaceCapabilities.minImageCount(), surfaceCapabilities.maxImageCount());
 		}
-
-		VkSwapchainCreateInfoKHR swapchainCreateInfo = VkSwapchainCreateInfoKHR.calloc(stack);
-		swapchainCreateInfo.sType$Default();
-		swapchainCreateInfo.surface(surface);
-		swapchainCreateInfo.minImageCount(imageCount);
-		swapchainCreateInfo.imageFormat(swapchainFormat);
-		swapchainCreateInfo.imageColorSpace(swapchainColorSpace);
-		swapchainCreateInfo.imageExtent(actualExtent);
-		swapchainCreateInfo.imageArrayLayers(1);
-		swapchainCreateInfo.imageUsage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
-
-		if (graphicsFamily != presentFamily)
-		{
-			swapchainCreateInfo.imageSharingMode(VK_SHARING_MODE_CONCURRENT);
-			swapchainCreateInfo.pQueueFamilyIndices(stack.ints(graphicsFamily, presentFamily));
-		} else
-		{
-			swapchainCreateInfo.imageSharingMode(VK_SHARING_MODE_EXCLUSIVE);
-		}
-
-		swapchainCreateInfo.preTransform(surfaceCapabilities.currentTransform());
-		swapchainCreateInfo.compositeAlpha(VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR);
-		swapchainCreateInfo.presentMode(VK_PRESENT_MODE_MAILBOX_KHR);
-		swapchainCreateInfo.clipped(true);
-
-		swapchain = Utils.createSwapchain(device, swapchainCreateInfo, stack);
-
-		long[] swapchainImages = Utils.getSwapchainImages(device, swapchain, stack);
-		swapchainImageViews = new long[swapchainImages.length];
-
-		for (int i = 0; i < swapchainImages.length; i++)
-		{
-			VkComponentMapping componentMapping = VkComponentMapping.calloc(stack);
-			componentMapping.r(VK_COMPONENT_SWIZZLE_IDENTITY);
-			componentMapping.g(VK_COMPONENT_SWIZZLE_IDENTITY);
-			componentMapping.b(VK_COMPONENT_SWIZZLE_IDENTITY);
-			componentMapping.a(VK_COMPONENT_SWIZZLE_IDENTITY);
-
-			VkImageSubresourceRange subresourceRange = VkImageSubresourceRange.calloc(stack);
-			subresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
-			subresourceRange.baseMipLevel(0);
-			subresourceRange.levelCount(1);
-			subresourceRange.baseArrayLayer(0);
-			subresourceRange.layerCount(1);
-
-			VkImageViewCreateInfo imageViewCreateInfo = VkImageViewCreateInfo.calloc(stack);
-			imageViewCreateInfo.sType$Default();
-			imageViewCreateInfo.image(swapchainImages[i]);
-			imageViewCreateInfo.viewType(VK_IMAGE_VIEW_TYPE_2D);
-			imageViewCreateInfo.format(swapchainFormat);
-			imageViewCreateInfo.components(componentMapping);
-			imageViewCreateInfo.subresourceRange(subresourceRange);
-
-			swapchainImageViews[i] = Utils.createImageView(device, imageViewCreateInfo, stack);
-		}
+		
+		swapchainImageCount = imageCount;
+		
+		swapchainObj = new Swapchain();
+		swapchainObj.create(surfaceCapabilities, actualExtent.width(), actualExtent.height(), device, surface, queueFamilies, renderPass, swapchainImageCount);
 	}
 
 	public void initGraphicsPipeline(MemoryStack stack)
@@ -639,6 +586,27 @@ public class Engine
 		
 		pipelineLayout = Utils.createPipelineLayout(device, pipelineLayoutCreateInfo, stack);
 
+		VkGraphicsPipelineCreateInfo.Buffer graphicsPipelineCreateInfo = VkGraphicsPipelineCreateInfo.calloc(1, stack);
+		graphicsPipelineCreateInfo.sType$Default();
+		graphicsPipelineCreateInfo.stageCount(2);
+		graphicsPipelineCreateInfo.pStages(shaderStages);
+		graphicsPipelineCreateInfo.pVertexInputState(pipelineVertexInputCreateInfo);
+		graphicsPipelineCreateInfo.pInputAssemblyState(pipelineInputAssemblyStateCreateInfo);
+		graphicsPipelineCreateInfo.pViewportState(pipelineViewportStateCreateInfo);
+		graphicsPipelineCreateInfo.pRasterizationState(pipelineRasterizationStateCreateInfo);
+		graphicsPipelineCreateInfo.pMultisampleState(pipelineMultisampleStateCreateInfo);
+		graphicsPipelineCreateInfo.pColorBlendState(pipelineColorBlendStateCreateInfo);
+		graphicsPipelineCreateInfo.pDynamicState(dynamicStateCreateInfo);
+		graphicsPipelineCreateInfo.layout(pipelineLayout);
+		graphicsPipelineCreateInfo.renderPass(renderPass);
+		graphicsPipelineCreateInfo.subpass(0);
+
+		graphicsPipeline = Utils.createGraphicsPipeline(device, graphicsPipelineCreateInfo, stack);
+	}
+
+	
+	private void createRenderPass(MemoryStack stack)
+	{
 		VkAttachmentDescription.Buffer colorAttachment = VkAttachmentDescription.calloc(1, stack);
 		colorAttachment.format(swapchainFormat);
 		colorAttachment.samples(VK_SAMPLE_COUNT_1_BIT);
@@ -673,51 +641,15 @@ public class Engine
 		renderPassCreateInfo.pDependencies(subpassDependency);
 
 		renderPass = Utils.createRenderPass(device, renderPassCreateInfo, stack);
-
-		VkGraphicsPipelineCreateInfo.Buffer graphicsPipelineCreateInfo = VkGraphicsPipelineCreateInfo.calloc(1, stack);
-		graphicsPipelineCreateInfo.sType$Default();
-		graphicsPipelineCreateInfo.stageCount(2);
-		graphicsPipelineCreateInfo.pStages(shaderStages);
-		graphicsPipelineCreateInfo.pVertexInputState(pipelineVertexInputCreateInfo);
-		graphicsPipelineCreateInfo.pInputAssemblyState(pipelineInputAssemblyStateCreateInfo);
-		graphicsPipelineCreateInfo.pViewportState(pipelineViewportStateCreateInfo);
-		graphicsPipelineCreateInfo.pRasterizationState(pipelineRasterizationStateCreateInfo);
-		graphicsPipelineCreateInfo.pMultisampleState(pipelineMultisampleStateCreateInfo);
-		graphicsPipelineCreateInfo.pColorBlendState(pipelineColorBlendStateCreateInfo);
-		graphicsPipelineCreateInfo.pDynamicState(dynamicStateCreateInfo);
-		graphicsPipelineCreateInfo.layout(pipelineLayout);
-		graphicsPipelineCreateInfo.renderPass(renderPass);
-		graphicsPipelineCreateInfo.subpass(0);
-
-		graphicsPipeline = Utils.createGraphicsPipeline(device, graphicsPipelineCreateInfo, stack);
 	}
-
-	private void initSwapchainFramebuffers(MemoryStack stack)
-	{
-		swapchainFramebuffers = new long[swapchainImageViews.length];
-
-		for (int i = 0; i < swapchainImageViews.length; i++)
-		{
-			VkFramebufferCreateInfo framebufferCreateInfo = VkFramebufferCreateInfo.calloc(stack);
-			framebufferCreateInfo.sType$Default();
-			framebufferCreateInfo.renderPass(renderPass);
-			framebufferCreateInfo.attachmentCount(1);
-			framebufferCreateInfo.pAttachments(stack.longs(swapchainImageViews[i]));
-			framebufferCreateInfo.width(framebufferExtent.width());
-			framebufferCreateInfo.height(framebufferExtent.height());
-			framebufferCreateInfo.layers(1);
-
-			swapchainFramebuffers[i] = Utils.createFramebuffer(device, framebufferCreateInfo, stack);
-		}
-	}
-
+	
 	private void initUniformBuffers(MemoryStack stack)
 	{
-		uniformBuffers = new long[swapchainImageViews.length];
-		uniformBuffersMemory = new long[swapchainImageViews.length];
-		uniformBuffersMappedMemory = new long[swapchainImageViews.length];
+		uniformBuffers = new long[swapchainImageCount];
+		uniformBuffersMemory = new long[swapchainImageCount];
+		uniformBuffersMappedMemory = new long[swapchainImageCount];
 		
-		for (int i = 0; i < swapchainImageViews.length; i++)
+		for (int i = 0; i < swapchainImageCount; i++)
 		{
 			ByRef<Long> byrefBuffer = new ByRef<>();
 			ByRef<Long> byrefBufferMemory = new ByRef<>();
@@ -739,7 +671,7 @@ public class Engine
 		VkCommandPoolCreateInfo commandPoolCreateInfo = VkCommandPoolCreateInfo.calloc(stack);
 		commandPoolCreateInfo.sType$Default();
 		commandPoolCreateInfo.flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-		commandPoolCreateInfo.queueFamilyIndex(graphicsFamily);
+		commandPoolCreateInfo.queueFamilyIndex(queueFamilies.graphicsFamily);
 
 		commandPool = Utils.createCommandPool(device, commandPoolCreateInfo, stack);
 
@@ -777,7 +709,7 @@ public class Engine
 
 			vkResetFences(device, inFlightFence);
 
-			int imageIndex = Utils.acquireNextImage(device, swapchain, imageAvailableSemaphore, stack);
+			int imageIndex = Utils.acquireNextImage(device, swapchainObj.swapchain, imageAvailableSemaphore, stack);
 
 			vkResetCommandBuffer(commandBuffer, 0);
 
@@ -799,7 +731,7 @@ public class Engine
 			presentInfo.sType$Default();
 			presentInfo.pWaitSemaphores(stack.longs(renderFinishedSemaphore));
 			presentInfo.swapchainCount(1);
-			presentInfo.pSwapchains(stack.longs(swapchain));
+			presentInfo.pSwapchains(stack.longs(swapchainObj.swapchain));
 			presentInfo.pImageIndices(stack.ints(imageIndex));
 
 			vkQueuePresentKHR(presentQueue, presentInfo);
@@ -857,7 +789,7 @@ public class Engine
 			VkRenderPassBeginInfo renderPassBeginInfo = VkRenderPassBeginInfo.calloc(stack);
 			renderPassBeginInfo.sType$Default();
 			renderPassBeginInfo.renderPass(renderPass);
-			renderPassBeginInfo.framebuffer(swapchainFramebuffers[imageIndex]);
+			renderPassBeginInfo.framebuffer(swapchainObj.swapchainFramebuffers[imageIndex]);
 			renderPassBeginInfo.renderArea(renderArea);
 			renderPassBeginInfo.clearValueCount(1);
 			renderPassBeginInfo.pClearValues(clearColor);
@@ -933,11 +865,6 @@ public class Engine
 
 		vkDestroyCommandPool(device, commandPool, null);
 
-		for (long framebuffer : swapchainFramebuffers)
-		{
-			vkDestroyFramebuffer(device, framebuffer, null);
-		}
-
 		vkDestroyPipeline(device, graphicsPipeline, null);
 		vkDestroyRenderPass(device, renderPass, null);
 		vkDestroyPipelineLayout(device, pipelineLayout, null);
@@ -948,6 +875,8 @@ public class Engine
 			vkFreeMemory(device, uniformBuffersMemory[i], null);
 		}
 
+		swapchainObj.__release(device);
+		
 		vkDestroyDescriptorPool(device, descriptorPool, null);
 		
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, null);
@@ -955,12 +884,6 @@ public class Engine
 		vkDestroyShaderModule(device, vertexShaderModule, null);
 		vkDestroyShaderModule(device, fragmentShaderModule, null);
 
-		for (long imageView : swapchainImageViews)
-		{
-			vkDestroyImageView(device, imageView, null);
-		}
-
-		vkDestroySwapchainKHR(device, swapchain, null);
 
 		framebufferExtent.free();
 
