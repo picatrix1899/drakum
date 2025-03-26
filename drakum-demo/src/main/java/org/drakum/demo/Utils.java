@@ -5,6 +5,7 @@ import static org.lwjgl.glfw.GLFWVulkan.*;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK10.VK_NULL_HANDLE;
+import static org.lwjgl.vulkan.VK10.vkAllocateMemory;
 import static org.lwjgl.vulkan.VK10.vkCreatePipelineLayout;
 import static org.lwjgl.vulkan.VK10.vkCreateShaderModule;
 import static org.lwjgl.vulkan.VK10.vkMapMemory;
@@ -28,6 +29,7 @@ import org.lwjgl.vulkan.VkGraphicsPipelineCreateInfo;
 import org.lwjgl.vulkan.VkImageViewCreateInfo;
 import org.lwjgl.vulkan.VkInstance;
 import org.lwjgl.vulkan.VkInstanceCreateInfo;
+import org.lwjgl.vulkan.VkMemoryAllocateInfo;
 import org.lwjgl.vulkan.VkPhysicalDevice;
 import org.lwjgl.vulkan.VkPipelineLayoutCreateInfo;
 import org.lwjgl.vulkan.VkQueue;
@@ -299,6 +301,15 @@ public class Utils
 		PointerBuffer buf = stack.mallocPointer(1);
 		
 		vkMapMemory(device, memory, offset, size, flags, buf);
+		
+		return buf.get(0);
+	}
+	
+	public static long allocateMemory(VkDevice device, VkMemoryAllocateInfo allocateInfo, MemoryStack stack)
+	{
+		LongBuffer buf = stack.mallocLong(1);
+		
+		vkAllocateMemory(device, allocateInfo, null, buf);
 		
 		return buf.get(0);
 	}

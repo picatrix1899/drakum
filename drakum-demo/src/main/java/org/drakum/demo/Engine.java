@@ -5,13 +5,11 @@ import static org.lwjgl.glfw.GLFWVulkan.*;
 import static org.lwjgl.vulkan.VK14.*;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
-import static org.lwjgl.vulkan.VK10.VK_FORMAT_B8G8R8A8_SRGB;
 
 import java.lang.foreign.ValueLayout;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
 import java.nio.LongBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,8 +21,6 @@ import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import org.barghos.util.byref.ByRef;
 import org.barghos.util.math.MathUtils;
 import org.joml.Matrix4f;
-import org.joml.Vector2f;
-import org.joml.Vector3f;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.system.MemoryStack;
@@ -104,12 +100,12 @@ public class Engine
 		}
 	};
 
+	private GPU gpu;
+	
 	private VkInstance vkInstance = null;
 	private PointerBuffer glfwExtensions;
 	private PointerBuffer enabledLayers;
-	private VkInstanceCreateInfo vkInstanceCreateInfo = null;
 	private long debugMessenger = 0;
-	private VkDevice device = null;
 	private long window = 0;
 	private long surface = 0;
 	
@@ -117,8 +113,6 @@ public class Engine
 
 	private VkQueue graphicsQueue = null;
 	private VkQueue presentQueue = null;
-	private VkPhysicalDevice physicalDevice = null;
-	
 	
 	private long vertexShaderModule;
 	private long fragmentShaderModule;
@@ -139,22 +133,7 @@ public class Engine
 	private int swapchainImageCount;
 	public int swapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
 	public int swapchainColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-	private Swapchain swapchainObj;
-	
-	private Vertex[] vertices = new Vertex[] {
-		new Vertex(new Vector2f(-0.5f, -0.5f), new Vector3f(1.0f, 0.0f, 0.0f)),	
-		new Vertex(new Vector2f(0.5f, -0.5f), new Vector3f(0.0f, 1.0f, 0.0f)),	
-		new Vertex(new Vector2f(0.5f, 0.5f), new Vector3f(0.0f, 0.0f, 1.0f)),	
-		new Vertex(new Vector2f(-0.5f, 0.5f), new Vector3f(1.0f, 1.0f, 1.0f)),	
-	};
-	
-	private int[] indices = new int[] {0, 1, 2, 2, 3, 0};
-	
-	private long vertexBuffer;
-	private long vertexBufferMemory;
-	
-	private long indexBuffer;
-	private long indexBufferMemory;
+	private Swapchain swapchain;
 	
 	private long descriptorSetLayout;
 	
@@ -166,7 +145,7 @@ public class Engine
 	private long[] uniformBuffersMemory = null;
 	private long[] uniformBuffersMappedMemory = null;
 	
-	
+	private Model model;
 	
 	public void start()
 	{
@@ -195,8 +174,10 @@ public class Engine
 			initCommandBuffer(stack);
 			createSyncObjects(stack);
 
-			createVertextBuffer(stack);
-			createIndexBuffer(stack);
+			model = new Model();
+			model.createVertexBuffer(gpu.device, gpu.physicalDevice, commandPool, graphicsQueue, stack);
+			model.createIndexBuffer(gpu.device, gpu.physicalDevice, commandPool, graphicsQueue, stack);
+
 			initUniformBuffers(stack);
 			createDescriptorPool(stack);
 			createDescriptorSets(stack);
@@ -219,7 +200,7 @@ public class Engine
 		
 		LongBuffer buf = stack.callocLong(swapchainImageCount);
 		
-		vkAllocateDescriptorSets(device, descriptorSetAllocateInfo, buf);
+		vkAllocateDescriptorSets(gpu.device, descriptorSetAllocateInfo, buf);
 		
 		descriptorSets = new long[swapchainImageCount];
 		
@@ -241,7 +222,7 @@ public class Engine
 			writeDescriptorSet.descriptorCount(1);
 			writeDescriptorSet.pBufferInfo(descriptorBufferInfo);
 			
-			vkUpdateDescriptorSets(device, writeDescriptorSet, null);
+			vkUpdateDescriptorSets(gpu.device, writeDescriptorSet, null);
 		}
 	}
 	
@@ -258,7 +239,7 @@ public class Engine
 		
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateDescriptorPool(device, descriptorPoolCreateInfo, null, buf);
+		vkCreateDescriptorPool(gpu.device, descriptorPoolCreateInfo, null, buf);
 		
 		descriptorPool = buf.get(0);
 	}
@@ -277,7 +258,7 @@ public class Engine
 		
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateDescriptorSetLayout(device, descriptorSetLayoutCreateInfo, null, buf);
+		vkCreateDescriptorSetLayout(gpu.device, descriptorSetLayoutCreateInfo, null, buf);
 		
 		descriptorSetLayout = buf.get(0);
 	}
@@ -353,7 +334,7 @@ public class Engine
 		debugCreateInfo.messageType(EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | EXTDebugUtils.VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT);
 		debugCreateInfo.pfnUserCallback(DEBUG_CALLBACK);
 
-		vkInstanceCreateInfo = VkInstanceCreateInfo.calloc();
+		VkInstanceCreateInfo vkInstanceCreateInfo = VkInstanceCreateInfo.calloc(stack);
 		vkInstanceCreateInfo.sType$Default();
 		vkInstanceCreateInfo.pApplicationInfo(appInfo);
 		vkInstanceCreateInfo.ppEnabledExtensionNames(enabledExtensions);
@@ -370,19 +351,21 @@ public class Engine
 
 	private void initDevice(MemoryStack stack)
 	{
+		gpu = new GPU();
+		
 		VkPhysicalDevice[] physicalDevices = Utils.enumeratePhysicalDevices(vkInstance, stack);
 
 		for (VkPhysicalDevice physDevice : physicalDevices)
 		{
 			if (isDeviceSuitable(physDevice, stack))
 			{
-				physicalDevice = physDevice;
+				gpu.physicalDevice = physDevice;
 
 				break;
 			}
 		}
 
-		VkQueueFamilyProperties[] familyPropertiesArray = Utils.getPhysicalDeviceQueueFamilyProperties(physicalDevice, stack);
+		VkQueueFamilyProperties[] familyPropertiesArray = Utils.getPhysicalDeviceQueueFamilyProperties(gpu.physicalDevice, stack);
 
 		queueFamilies = new QueueFamilyList();
 		
@@ -395,7 +378,7 @@ public class Engine
 				queueFamilies.graphicsFamily = i;
 			}
 
-			if (Utils.getPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, stack))
+			if (Utils.getPhysicalDeviceSurfaceSupportKHR(gpu.physicalDevice, i, surface, stack))
 			{
 				queueFamilies.presentFamily = i;
 			}
@@ -440,15 +423,15 @@ public class Engine
 		deviceCreateInfo.ppEnabledLayerNames(enabledLayers);
 		deviceCreateInfo.ppEnabledExtensionNames(deviceExtensions);
 
-		device = Utils.createDevice(deviceCreateInfo, physicalDevice, stack);
+		gpu.device = Utils.createDevice(deviceCreateInfo, gpu.physicalDevice, stack);
 
-		graphicsQueue = Utils.getDeviceQueue(device, queueFamilies.graphicsFamily, 0, stack);
-		presentQueue = Utils.getDeviceQueue(device, queueFamilies.presentFamily, 0, stack);
+		graphicsQueue = Utils.getDeviceQueue(gpu.device, queueFamilies.graphicsFamily, 0, stack);
+		presentQueue = Utils.getDeviceQueue(gpu.device, queueFamilies.presentFamily, 0, stack);
 	}
 
 	private void initSwapchain(MemoryStack stack)
 	{
-		VkSurfaceCapabilitiesKHR surfaceCapabilities = Utils.getPhysicalDeviceSurfaceCapabilities(physicalDevice, surface, stack);
+		VkSurfaceCapabilitiesKHR surfaceCapabilities = Utils.getPhysicalDeviceSurfaceCapabilities(gpu.physicalDevice, surface, stack);
 
 		VkExtent2D actualExtent = Utils.getFramebufferSize(window, stack);
 
@@ -465,8 +448,8 @@ public class Engine
 		
 		swapchainImageCount = imageCount;
 		
-		swapchainObj = new Swapchain();
-		swapchainObj.create(surfaceCapabilities, actualExtent.width(), actualExtent.height(), device, surface, queueFamilies, renderPass, swapchainImageCount);
+		swapchain = new Swapchain();
+		swapchain.create(surfaceCapabilities, actualExtent.width(), actualExtent.height(), gpu.device, surface, queueFamilies, renderPass, swapchainImageCount);
 	}
 
 	public void initGraphicsPipeline(MemoryStack stack)
@@ -478,36 +461,30 @@ public class Engine
 		vertexShaderModuleCreateInfo.sType$Default();
 		vertexShaderModuleCreateInfo.pCode(vertexShaderData);
 
-		vertexShaderModule = Utils.createShaderModule(device, vertexShaderModuleCreateInfo, stack);
+		vertexShaderModule = Utils.createShaderModule(gpu.device, vertexShaderModuleCreateInfo, stack);
 
 		VkShaderModuleCreateInfo fragmentShaderModuleCreateInfo = VkShaderModuleCreateInfo.calloc(stack);
 		fragmentShaderModuleCreateInfo.sType$Default();
 		fragmentShaderModuleCreateInfo.pCode(fragmentShaderData);
 
-		fragmentShaderModule = Utils.createShaderModule(device, fragmentShaderModuleCreateInfo, stack);
-
-		VkPipelineShaderStageCreateInfo vertexPipelineShaderStageCreateInfo = VkPipelineShaderStageCreateInfo.calloc(stack);
-		vertexPipelineShaderStageCreateInfo.sType$Default();
-		vertexPipelineShaderStageCreateInfo.stage(VK_SHADER_STAGE_VERTEX_BIT);
-		vertexPipelineShaderStageCreateInfo.module(vertexShaderModule);
-		vertexPipelineShaderStageCreateInfo.pName(stack.UTF8("main"));
-
-		VkPipelineShaderStageCreateInfo fragmentPipelineShaderStageCreateInfo = VkPipelineShaderStageCreateInfo.calloc(stack);
-		fragmentPipelineShaderStageCreateInfo.sType$Default();
-		fragmentPipelineShaderStageCreateInfo.stage(VK_SHADER_STAGE_FRAGMENT_BIT);
-		fragmentPipelineShaderStageCreateInfo.module(fragmentShaderModule);
-		fragmentPipelineShaderStageCreateInfo.pName(stack.UTF8("main"));
+		fragmentShaderModule = Utils.createShaderModule(gpu.device, fragmentShaderModuleCreateInfo, stack);
 
 		VkPipelineShaderStageCreateInfo.Buffer shaderStages = VkPipelineShaderStageCreateInfo.calloc(2, stack);
-		shaderStages.put(0, vertexPipelineShaderStageCreateInfo);
-		shaderStages.put(1, fragmentPipelineShaderStageCreateInfo);
+		shaderStages.get(0).sType$Default();
+		shaderStages.get(0).stage(VK_SHADER_STAGE_VERTEX_BIT);
+		shaderStages.get(0).module(vertexShaderModule);
+		shaderStages.get(0).pName(stack.UTF8("main"));
+		shaderStages.get(1).sType$Default();
+		shaderStages.get(1).stage(VK_SHADER_STAGE_FRAGMENT_BIT);
+		shaderStages.get(1).module(fragmentShaderModule);
+		shaderStages.get(1).pName(stack.UTF8("main"));
 
 		VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo = VkPipelineDynamicStateCreateInfo.calloc(stack);
 		dynamicStateCreateInfo.sType$Default();
 		dynamicStateCreateInfo.pDynamicStates(stack.ints(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR));
 
-		VkVertexInputBindingDescription.Buffer bindingDescriptions = Vertex.getBindingDecription(stack);
-		VkVertexInputAttributeDescription.Buffer attributeDescriptions = Vertex.getAttributeDescription(stack);
+		VkVertexInputBindingDescription.Buffer bindingDescriptions = Model.Vertex.getBindingDecription(stack);
+		VkVertexInputAttributeDescription.Buffer attributeDescriptions = Model.Vertex.getAttributeDescription(stack);
 		
 		VkPipelineVertexInputStateCreateInfo pipelineVertexInputCreateInfo = VkPipelineVertexInputStateCreateInfo.calloc(stack);
 		pipelineVertexInputCreateInfo.sType$Default();
@@ -584,7 +561,7 @@ public class Engine
 		pipelineLayoutCreateInfo.pSetLayouts(stack.longs(descriptorSetLayout));
 		pipelineLayoutCreateInfo.setLayoutCount(1);
 		
-		pipelineLayout = Utils.createPipelineLayout(device, pipelineLayoutCreateInfo, stack);
+		pipelineLayout = Utils.createPipelineLayout(gpu.device, pipelineLayoutCreateInfo, stack);
 
 		VkGraphicsPipelineCreateInfo.Buffer graphicsPipelineCreateInfo = VkGraphicsPipelineCreateInfo.calloc(1, stack);
 		graphicsPipelineCreateInfo.sType$Default();
@@ -601,7 +578,7 @@ public class Engine
 		graphicsPipelineCreateInfo.renderPass(renderPass);
 		graphicsPipelineCreateInfo.subpass(0);
 
-		graphicsPipeline = Utils.createGraphicsPipeline(device, graphicsPipelineCreateInfo, stack);
+		graphicsPipeline = Utils.createGraphicsPipeline(gpu.device, graphicsPipelineCreateInfo, stack);
 	}
 
 	
@@ -640,7 +617,7 @@ public class Engine
 		renderPassCreateInfo.pSubpasses(subpass);
 		renderPassCreateInfo.pDependencies(subpassDependency);
 
-		renderPass = Utils.createRenderPass(device, renderPassCreateInfo, stack);
+		renderPass = Utils.createRenderPass(gpu.device, renderPassCreateInfo, stack);
 	}
 	
 	private void initUniformBuffers(MemoryStack stack)
@@ -658,7 +635,7 @@ public class Engine
 			
 			long buffer = byrefBuffer.value;
 			long bufferMemory = byrefBufferMemory.value;
-			long mappedMemoryAddress = Utils.mapMemory(device, bufferMemory, 0, UBO.byteSize(), 0, stack);
+			long mappedMemoryAddress = Utils.mapMemory(gpu.device, bufferMemory, 0, UBO.byteSize(), 0, stack);
 			
 			uniformBuffers[i] = buffer;
 			uniformBuffersMemory[i] = bufferMemory;
@@ -673,7 +650,7 @@ public class Engine
 		commandPoolCreateInfo.flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 		commandPoolCreateInfo.queueFamilyIndex(queueFamilies.graphicsFamily);
 
-		commandPool = Utils.createCommandPool(device, commandPoolCreateInfo, stack);
+		commandPool = Utils.createCommandPool(gpu.device, commandPoolCreateInfo, stack);
 
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo = VkCommandBufferAllocateInfo.calloc(stack);
 		commandBufferAllocateInfo.sType$Default();
@@ -681,7 +658,7 @@ public class Engine
 		commandBufferAllocateInfo.level(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 		commandBufferAllocateInfo.commandBufferCount(1);
 
-		commandBuffer = Utils.allocateCommandBuffer(device, commandBufferAllocateInfo, stack);
+		commandBuffer = Utils.allocateCommandBuffer(gpu.device, commandBufferAllocateInfo, stack);
 
 	}
 
@@ -693,7 +670,7 @@ public class Engine
 			render();
 		}
 
-		vkDeviceWaitIdle(device);
+		vkDeviceWaitIdle(gpu.device);
 	}
 
 	public void update()
@@ -705,11 +682,11 @@ public class Engine
 	{
 		try (MemoryStack stack = MemoryStack.stackPush())
 		{
-			vkWaitForFences(device, inFlightFence, true, Long.MAX_VALUE);
+			vkWaitForFences(gpu.device, inFlightFence, true, Long.MAX_VALUE);
 
-			vkResetFences(device, inFlightFence);
+			vkResetFences(gpu.device, inFlightFence);
 
-			int imageIndex = Utils.acquireNextImage(device, swapchainObj.swapchain, imageAvailableSemaphore, stack);
+			int imageIndex = Utils.acquireNextImage(gpu.device, swapchain.swapchain, imageAvailableSemaphore, stack);
 
 			vkResetCommandBuffer(commandBuffer, 0);
 
@@ -731,7 +708,7 @@ public class Engine
 			presentInfo.sType$Default();
 			presentInfo.pWaitSemaphores(stack.longs(renderFinishedSemaphore));
 			presentInfo.swapchainCount(1);
-			presentInfo.pSwapchains(stack.longs(swapchainObj.swapchain));
+			presentInfo.pSwapchains(stack.longs(swapchain.swapchain));
 			presentInfo.pImageIndices(stack.ints(imageIndex));
 
 			vkQueuePresentKHR(presentQueue, presentInfo);
@@ -789,7 +766,7 @@ public class Engine
 			VkRenderPassBeginInfo renderPassBeginInfo = VkRenderPassBeginInfo.calloc(stack);
 			renderPassBeginInfo.sType$Default();
 			renderPassBeginInfo.renderPass(renderPass);
-			renderPassBeginInfo.framebuffer(swapchainObj.swapchainFramebuffers[imageIndex]);
+			renderPassBeginInfo.framebuffer(swapchain.swapchainFramebuffers[imageIndex]);
 			renderPassBeginInfo.renderArea(renderArea);
 			renderPassBeginInfo.clearValueCount(1);
 			renderPassBeginInfo.pClearValues(clearColor);
@@ -818,16 +795,16 @@ public class Engine
 
 			vkCmdSetScissor(commandBuffer, 0, scissor);
 
-			LongBuffer vertexBuffers = stack.longs(vertexBuffer);
+			LongBuffer vertexBuffers = stack.longs(model.vertexBuffer.buffer);
 			LongBuffer offsets = stack.longs(0);
 			
 			vkCmdBindVertexBuffers(commandBuffer, 0, vertexBuffers, offsets);
 			
-			vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdBindIndexBuffer(commandBuffer, model.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 			
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, stack.longs(descriptorSets[imageIndex]), null);
 			
-			vkCmdDrawIndexed(commandBuffer, indices.length, 1, 0, 0, 0);
+			vkCmdDrawIndexed(commandBuffer, model.indices.length, 1, 0, 0, 0);
 
 			vkCmdEndRenderPass(commandBuffer);
 
@@ -840,62 +817,56 @@ public class Engine
 		VkSemaphoreCreateInfo semaphoreCreateInfo = VkSemaphoreCreateInfo.calloc(stack);
 		semaphoreCreateInfo.sType$Default();
 
-		imageAvailableSemaphore = Utils.createSemaphore(device, semaphoreCreateInfo, stack);
-		renderFinishedSemaphore = Utils.createSemaphore(device, semaphoreCreateInfo, stack);
+		imageAvailableSemaphore = Utils.createSemaphore(gpu.device, semaphoreCreateInfo, stack);
+		renderFinishedSemaphore = Utils.createSemaphore(gpu.device, semaphoreCreateInfo, stack);
 
 		VkFenceCreateInfo fenceCreateInfo = VkFenceCreateInfo.calloc(stack);
 		fenceCreateInfo.sType$Default();
 		fenceCreateInfo.flags(VK_FENCE_CREATE_SIGNALED_BIT);
 
-		inFlightFence = Utils.createFence(device, fenceCreateInfo, stack);
+		inFlightFence = Utils.createFence(gpu.device, fenceCreateInfo, stack);
 	}
 
 	public void __release()
 	{
-		vkDestroyBuffer(device, indexBuffer, null);
-		vkFreeMemory(device, indexBufferMemory, null);
-		
-		vkDestroyBuffer(device, vertexBuffer, null);
-		vkFreeMemory(device, vertexBufferMemory, null);
+		model.__release(gpu.device);
 
-		vkDestroySemaphore(device, imageAvailableSemaphore, null);
-		vkDestroySemaphore(device, renderFinishedSemaphore, null);
+		vkDestroySemaphore(gpu.device, imageAvailableSemaphore, null);
+		vkDestroySemaphore(gpu.device, renderFinishedSemaphore, null);
 
-		vkDestroyFence(device, inFlightFence, null);
+		vkDestroyFence(gpu.device, inFlightFence, null);
 
-		vkDestroyCommandPool(device, commandPool, null);
+		vkDestroyCommandPool(gpu.device, commandPool, null);
 
-		vkDestroyPipeline(device, graphicsPipeline, null);
-		vkDestroyRenderPass(device, renderPass, null);
-		vkDestroyPipelineLayout(device, pipelineLayout, null);
+		vkDestroyPipeline(gpu.device, graphicsPipeline, null);
+		vkDestroyRenderPass(gpu.device, renderPass, null);
+		vkDestroyPipelineLayout(gpu.device, pipelineLayout, null);
 
 		for (int i = 0; i < uniformBuffers.length; i++)
 		{
-			vkDestroyBuffer(device, uniformBuffers[i], null);
-			vkFreeMemory(device, uniformBuffersMemory[i], null);
+			vkDestroyBuffer(gpu.device, uniformBuffers[i], null);
+			vkFreeMemory(gpu.device, uniformBuffersMemory[i], null);
 		}
 
-		swapchainObj.__release(device);
+		swapchain.__release(gpu.device);
 		
-		vkDestroyDescriptorPool(device, descriptorPool, null);
+		vkDestroyDescriptorPool(gpu.device, descriptorPool, null);
 		
-		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, null);
+		vkDestroyDescriptorSetLayout(gpu.device, descriptorSetLayout, null);
 		
-		vkDestroyShaderModule(device, vertexShaderModule, null);
-		vkDestroyShaderModule(device, fragmentShaderModule, null);
+		vkDestroyShaderModule(gpu.device, vertexShaderModule, null);
+		vkDestroyShaderModule(gpu.device, fragmentShaderModule, null);
 
 
 		framebufferExtent.free();
 
 		vkDestroySurfaceKHR(vkInstance, surface, null);
 
-		vkDestroyDevice(device, null);
+		vkDestroyDevice(gpu.device, null);
 
 		EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT(vkInstance, debugMessenger, null);
 
 		vkDestroyInstance(vkInstance, null);
-
-		vkInstanceCreateInfo.free();
 
 		glfwDestroyWindow(window);
 
@@ -931,45 +902,6 @@ public class Engine
 		return deviceProperties.deviceType() == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader();
 	}
 	
-	public void createVertextBuffer(MemoryStack stack)
-	{
-		ByRef<Long> byrefStagingBuffer = new ByRef<>();
-		ByRef<Long> byrefStagingBufferMemory = new ByRef<>();
-		
-		createBuffer(Vertex.byteSize() * vertices.length, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, byrefStagingBuffer, byrefStagingBufferMemory, stack);
-		
-		long stagingBuffer = byrefStagingBuffer.value;
-		long stagingBufferMemory = byrefStagingBufferMemory.value;
-		
-		long mappedMemoryAddress = Utils.mapMemory(device, stagingBufferMemory, 0, Vertex.byteSize() * vertices.length, 0, stack);
-		
-		FloatBuffer floatMappedMemory = MemoryUtil.memFloatBuffer(mappedMemoryAddress, Vertex.floatSize() * vertices.length);
-		
-		for(Vertex v : vertices)
-		{
-			floatMappedMemory.put(v.pos.x);
-			floatMappedMemory.put(v.pos.y);
-			floatMappedMemory.put(v.color.x);
-			floatMappedMemory.put(v.color.y);
-			floatMappedMemory.put(v.color.z);
-		}
-		
-		vkUnmapMemory(device, stagingBufferMemory);
-		
-		ByRef<Long> byrefVertexBuffer = new ByRef<>();
-		ByRef<Long> byrefVertexBufferMemory = new ByRef<>();
-		
-		createBuffer(Vertex.byteSize() * vertices.length, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, byrefVertexBuffer, byrefVertexBufferMemory, stack);
-		
-		vertexBuffer = byrefVertexBuffer.value;
-		vertexBufferMemory = byrefVertexBufferMemory.value;
-		
-		copyBuffer(stagingBuffer, vertexBuffer, Vertex.byteSize() * vertices.length, stack);
-		
-		vkDestroyBuffer(device, stagingBuffer, null);
-		vkFreeMemory(device, stagingBufferMemory, null);
-	}
-	
 	public void copyBuffer(long srcBuffer, long dstBuffer, int size, MemoryStack stack)
 	{
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo = VkCommandBufferAllocateInfo.calloc(stack);
@@ -978,7 +910,7 @@ public class Engine
 		commandBufferAllocateInfo.commandPool(commandPool);
 		commandBufferAllocateInfo.commandBufferCount(1);
 		
-		VkCommandBuffer cmdBuffer = Utils.allocateCommandBuffer(device, commandBufferAllocateInfo, stack);
+		VkCommandBuffer cmdBuffer = Utils.allocateCommandBuffer(gpu.device, commandBufferAllocateInfo, stack);
 		
 		VkCommandBufferBeginInfo commandBufferBeginInfo = VkCommandBufferBeginInfo.calloc(stack);
 		commandBufferBeginInfo.sType$Default();
@@ -1003,7 +935,7 @@ public class Engine
 		
 		vkQueueWaitIdle(graphicsQueue);
 		
-		vkFreeCommandBuffers(device, commandPool, stack.pointers(cmdBuffer));
+		vkFreeCommandBuffers(gpu.device, commandPool, stack.pointers(cmdBuffer));
 	}
 	
 	public void createBuffer(long size, int usage, int properties, ByRef<Long> buffer, ByRef<Long> bufferMemory, MemoryStack stack)
@@ -1014,11 +946,11 @@ public class Engine
 		bufferCreateInfo.usage(usage);
 		bufferCreateInfo.sharingMode(VK_SHARING_MODE_EXCLUSIVE);
 		
-		long newBuffer = Utils.createBuffer(device, bufferCreateInfo, stack);
+		long newBuffer = Utils.createBuffer(gpu.device, bufferCreateInfo, stack);
 		
 		VkMemoryRequirements memoryRequirements = VkMemoryRequirements.calloc(stack);
 		
-		vkGetBufferMemoryRequirements(device, newBuffer, memoryRequirements);
+		vkGetBufferMemoryRequirements(gpu.device, newBuffer, memoryRequirements);
 		
 		VkMemoryAllocateInfo memoryAllocateInfo = VkMemoryAllocateInfo.calloc(stack);
 		memoryAllocateInfo.sType$Default();
@@ -1027,11 +959,11 @@ public class Engine
 		
 		LongBuffer memoryBuffer = stack.mallocLong(1);
 		
-		vkAllocateMemory(device, memoryAllocateInfo, null, memoryBuffer);
+		vkAllocateMemory(gpu.device, memoryAllocateInfo, null, memoryBuffer);
 		
 		long newBufferMemory = memoryBuffer.get(0);
 		
-		vkBindBufferMemory(device, newBuffer, newBufferMemory, 0);
+		vkBindBufferMemory(gpu.device, newBuffer, newBufferMemory, 0);
 		
 		buffer.value = newBuffer;
 		bufferMemory.value = newBufferMemory;
@@ -1041,7 +973,7 @@ public class Engine
 	{
 		VkPhysicalDeviceMemoryProperties memoryProperties = VkPhysicalDeviceMemoryProperties.calloc(stack);
 		
-		vkGetPhysicalDeviceMemoryProperties(physicalDevice, memoryProperties);
+		vkGetPhysicalDeviceMemoryProperties(gpu.physicalDevice, memoryProperties);
 		
 		for(int i = 0; i < memoryProperties.memoryTypeCount(); i++)
 		{
@@ -1052,84 +984,6 @@ public class Engine
 		}
 		
 		throw new Error();
-	}
-	
-	public void createIndexBuffer(MemoryStack stack)
-	{
-		ByRef<Long> byrefStagingBuffer = new ByRef<>();
-		ByRef<Long> byrefStagingBufferMemory = new ByRef<>();
-		
-		createBuffer(4 * indices.length, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, byrefStagingBuffer, byrefStagingBufferMemory, stack);
-		
-		long stagingBuffer = byrefStagingBuffer.value;
-		long stagingBufferMemory = byrefStagingBufferMemory.value;
-		
-		long mappedMemoryAddress = Utils.mapMemory(device, stagingBufferMemory, 0, 4 * indices.length, 0, stack);
-
-		IntBuffer intMappedMemory = MemoryUtil.memIntBuffer(mappedMemoryAddress, indices.length);
-		intMappedMemory.put(indices);
-		
-		vkUnmapMemory(device, stagingBufferMemory);
-		
-		ByRef<Long> byrefIndexBuffer = new ByRef<>();
-		ByRef<Long> byrefIndexBufferMemory = new ByRef<>();
-		
-		createBuffer(4 * indices.length, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, byrefIndexBuffer, byrefIndexBufferMemory, stack);
-		
-		indexBuffer = byrefIndexBuffer.value;
-		indexBufferMemory = byrefIndexBufferMemory.value;
-		
-		copyBuffer(stagingBuffer, indexBuffer, 4 * indices.length, stack);
-		
-		vkDestroyBuffer(device, stagingBuffer, null);
-		vkFreeMemory(device, stagingBufferMemory, null);
-	}
-	
-	public static class Vertex
-	{
-		public Vector2f pos;
-		public Vector3f color;
-		
-		public static int byteSize()
-		{
-			return (int)ValueLayout.JAVA_FLOAT.byteSize() * floatSize();
-		}
-		
-		public static int floatSize()
-		{
-			return 2 + 3;
-		}
-		
-		public Vertex(Vector2f pos, Vector3f color)
-		{
-			this.pos = pos;
-			this.color = color;
-		}
-		
-		public static VkVertexInputBindingDescription.Buffer getBindingDecription(MemoryStack stack)
-		{
-			VkVertexInputBindingDescription.Buffer bindingDecription = VkVertexInputBindingDescription.calloc(1, stack);
-			bindingDecription.binding(0);
-			bindingDecription.stride((int)ValueLayout.JAVA_FLOAT.byteSize() * (2 + 3));
-			bindingDecription.inputRate(VK_VERTEX_INPUT_RATE_VERTEX);
-			
-			return bindingDecription;
-		}
-		
-		public static VkVertexInputAttributeDescription.Buffer getAttributeDescription(MemoryStack stack)
-		{
-			VkVertexInputAttributeDescription.Buffer attributeDescriptions = VkVertexInputAttributeDescription.calloc(2, stack);
-			attributeDescriptions.get(0).binding(0);
-			attributeDescriptions.get(0).location(0);
-			attributeDescriptions.get(0).format(VK_FORMAT_R32G32_SFLOAT);
-			attributeDescriptions.get(0).offset(0);
-			attributeDescriptions.get(1).binding(0);
-			attributeDescriptions.get(1).location(1);
-			attributeDescriptions.get(1).format(VK_FORMAT_R32G32B32_SFLOAT);
-			attributeDescriptions.get(1).offset((int)ValueLayout.JAVA_FLOAT.byteSize() * 2);
-			
-			return attributeDescriptions;
-		}
 	}
 	
 	public static class UBO
