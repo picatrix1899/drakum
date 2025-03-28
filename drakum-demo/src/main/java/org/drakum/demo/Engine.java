@@ -1,32 +1,20 @@
 package org.drakum.demo;
 
 import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.glfw.GLFWVulkan.*;
 import static org.lwjgl.vulkan.VK14.*;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
 
 import java.lang.foreign.ValueLayout;
-import java.net.URL;
-import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.LongBuffer;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
-
-import static org.lwjgl.vulkan.EXTDebugUtils.*;
 
 import org.barghos.util.byref.ByRef;
 import org.barghos.util.math.MathUtils;
 import org.joml.Matrix4f;
-import org.lwjgl.PointerBuffer;
-import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
-import org.lwjgl.vulkan.EXTDebugUtils;
-import org.lwjgl.vulkan.VkApplicationInfo;
 import org.lwjgl.vulkan.VkAttachmentDescription;
 import org.lwjgl.vulkan.VkAttachmentReference;
 import org.lwjgl.vulkan.VkBufferCopy;
@@ -37,9 +25,6 @@ import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkCommandBufferAllocateInfo;
 import org.lwjgl.vulkan.VkCommandBufferBeginInfo;
 import org.lwjgl.vulkan.VkCommandPoolCreateInfo;
-import org.lwjgl.vulkan.VkDebugUtilsMessengerCallbackDataEXT;
-import org.lwjgl.vulkan.VkDebugUtilsMessengerCallbackEXT;
-import org.lwjgl.vulkan.VkDebugUtilsMessengerCreateInfoEXT;
 import org.lwjgl.vulkan.VkDescriptorBufferInfo;
 import org.lwjgl.vulkan.VkDescriptorPoolCreateInfo;
 import org.lwjgl.vulkan.VkDescriptorPoolSize;
@@ -48,38 +33,19 @@ import org.lwjgl.vulkan.VkDescriptorSetLayoutBinding;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutCreateInfo;
 import org.lwjgl.vulkan.VkExtent2D;
 import org.lwjgl.vulkan.VkFenceCreateInfo;
-import org.lwjgl.vulkan.VkGraphicsPipelineCreateInfo;
-import org.lwjgl.vulkan.VkInstance;
-import org.lwjgl.vulkan.VkInstanceCreateInfo;
 import org.lwjgl.vulkan.VkMemoryAllocateInfo;
 import org.lwjgl.vulkan.VkMemoryRequirements;
 import org.lwjgl.vulkan.VkOffset2D;
-import org.lwjgl.vulkan.VkPhysicalDevice;
-import org.lwjgl.vulkan.VkPhysicalDeviceFeatures;
 import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties;
-import org.lwjgl.vulkan.VkPhysicalDeviceProperties;
-import org.lwjgl.vulkan.VkPipelineColorBlendAttachmentState;
-import org.lwjgl.vulkan.VkPipelineColorBlendStateCreateInfo;
-import org.lwjgl.vulkan.VkPipelineDynamicStateCreateInfo;
-import org.lwjgl.vulkan.VkPipelineInputAssemblyStateCreateInfo;
-import org.lwjgl.vulkan.VkPipelineLayoutCreateInfo;
-import org.lwjgl.vulkan.VkPipelineMultisampleStateCreateInfo;
-import org.lwjgl.vulkan.VkPipelineRasterizationStateCreateInfo;
-import org.lwjgl.vulkan.VkPipelineShaderStageCreateInfo;
-import org.lwjgl.vulkan.VkPipelineVertexInputStateCreateInfo;
-import org.lwjgl.vulkan.VkPipelineViewportStateCreateInfo;
 import org.lwjgl.vulkan.VkPresentInfoKHR;
 import org.lwjgl.vulkan.VkRect2D;
 import org.lwjgl.vulkan.VkRenderPassBeginInfo;
 import org.lwjgl.vulkan.VkRenderPassCreateInfo;
 import org.lwjgl.vulkan.VkSemaphoreCreateInfo;
-import org.lwjgl.vulkan.VkShaderModuleCreateInfo;
 import org.lwjgl.vulkan.VkSubmitInfo;
 import org.lwjgl.vulkan.VkSubpassDependency;
 import org.lwjgl.vulkan.VkSubpassDescription;
 import org.lwjgl.vulkan.VkSurfaceCapabilitiesKHR;
-import org.lwjgl.vulkan.VkVertexInputAttributeDescription;
-import org.lwjgl.vulkan.VkVertexInputBindingDescription;
 import org.lwjgl.vulkan.VkViewport;
 import org.lwjgl.vulkan.VkWriteDescriptorSet;
 
@@ -89,17 +55,12 @@ public class Engine
 	
 	private GPU gpu;
 	
-	private long window = 0;
+	private Window window;
 	private long surface = 0;
-	
-	private long vertexShaderModule;
-	private long fragmentShaderModule;
 
 	private VkExtent2D framebufferExtent;
 
-	private long pipelineLayout;
 	private long renderPass;
-	private long graphicsPipeline;
 
 	private long commandPool;
 	private VkCommandBuffer commandBuffer;
@@ -125,6 +86,8 @@ public class Engine
 	
 	private Model model;
 	
+	private Pipeline graphicsPipeline;
+	
 	public void start()
 	{
 		__init();
@@ -136,9 +99,10 @@ public class Engine
 
 	public void __init()
 	{
-		initGLFW();
-		initWindow();
+		GLFWContext.__init();
 
+		window = new Window.Builder().create();
+		
 		try (MemoryStack stack = MemoryStack.stackPush())
 		{
 			vkInstance = new VulkanInstance.Builder()
@@ -155,7 +119,9 @@ public class Engine
 			createRenderPass(stack);
 			initSwapchain(stack);
 			createDescriptorSetLayout(stack);
-			initGraphicsPipeline(stack);
+
+			graphicsPipeline = new Pipeline.Builder().create(gpu, framebufferExtent, descriptorSetLayout, renderPass, Model.Vertex.getBindingDecription(stack), Model.Vertex.getAttributeDescription(stack));
+			
 			initCommandBuffer(stack);
 			createSyncObjects(stack);
 
@@ -167,7 +133,7 @@ public class Engine
 			createDescriptorPool(stack);
 			createDescriptorSets(stack);
 			
-			glfwShowWindow(window);
+			window.show();
 		}
 		
 		lastTime = System.nanoTime();
@@ -247,61 +213,17 @@ public class Engine
 		
 		descriptorSetLayout = buf.get(0);
 	}
-	
-	private ByteBuffer readFile(String file, MemoryStack stack)
-	{
-		URL url = Engine.class.getResource(file);
-		try
-		{
-			Path path = Paths.get(url.toURI());
-			byte[] data = Files.readAllBytes(path);
-			ByteBuffer code = stack.malloc(data.length);
-			code.put(data);
-			code.flip();
-
-			return code;
-		} catch (Exception e)
-		{
-			e.printStackTrace();
-		}
-
-		return null;
-	}
-
-	private void initGLFW()
-	{
-		if (!glfwInit())
-		{
-			throw new Error("Cannot init glfw");
-		}
-
-		glfwSetErrorCallback(GLFWErrorCallback.createPrint(System.out));
-
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	}
-
-	private void initWindow()
-	{
-		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-
-		window = glfwCreateWindow(800, 600, "Drakum Demo", 0, 0);
-
-		if (window == 0)
-		{
-			throw new Error("Cannot create window");
-		}
-	}
 
 	private void initSurface(MemoryStack stack)
 	{
-		surface = Utils.createWindowSurface(vkInstance.handle(), window, stack);
+		surface = Utils.createWindowSurface(vkInstance.handle(), window.handle, stack);
 	}
 
 	private void initSwapchain(MemoryStack stack)
 	{
 		VkSurfaceCapabilitiesKHR surfaceCapabilities = Utils.getPhysicalDeviceSurfaceCapabilities(gpu.physicalDevice, surface, stack);
 
-		VkExtent2D actualExtent = Utils.getFramebufferSize(window, stack);
+		VkExtent2D actualExtent = Utils.getFramebufferSize(window.handle, stack);
 
 		framebufferExtent = VkExtent2D.calloc();
 
@@ -319,136 +241,6 @@ public class Engine
 		swapchain = new Swapchain();
 		swapchain.create(surfaceCapabilities, actualExtent.width(), actualExtent.height(), gpu.device, surface, gpu.queueFamilies, renderPass, swapchainImageCount);
 	}
-
-	public void initGraphicsPipeline(MemoryStack stack)
-	{
-		ByteBuffer vertexShaderData = readFile("/vert.spv", stack);
-		ByteBuffer fragmentShaderData = readFile("/frag.spv", stack);
-
-		VkShaderModuleCreateInfo vertexShaderModuleCreateInfo = VkShaderModuleCreateInfo.calloc(stack);
-		vertexShaderModuleCreateInfo.sType$Default();
-		vertexShaderModuleCreateInfo.pCode(vertexShaderData);
-
-		vertexShaderModule = Utils.createShaderModule(gpu.device, vertexShaderModuleCreateInfo, stack);
-
-		VkShaderModuleCreateInfo fragmentShaderModuleCreateInfo = VkShaderModuleCreateInfo.calloc(stack);
-		fragmentShaderModuleCreateInfo.sType$Default();
-		fragmentShaderModuleCreateInfo.pCode(fragmentShaderData);
-
-		fragmentShaderModule = Utils.createShaderModule(gpu.device, fragmentShaderModuleCreateInfo, stack);
-
-		VkPipelineShaderStageCreateInfo.Buffer shaderStages = VkPipelineShaderStageCreateInfo.calloc(2, stack);
-		shaderStages.get(0).sType$Default();
-		shaderStages.get(0).stage(VK_SHADER_STAGE_VERTEX_BIT);
-		shaderStages.get(0).module(vertexShaderModule);
-		shaderStages.get(0).pName(stack.UTF8("main"));
-		shaderStages.get(1).sType$Default();
-		shaderStages.get(1).stage(VK_SHADER_STAGE_FRAGMENT_BIT);
-		shaderStages.get(1).module(fragmentShaderModule);
-		shaderStages.get(1).pName(stack.UTF8("main"));
-
-		VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo = VkPipelineDynamicStateCreateInfo.calloc(stack);
-		dynamicStateCreateInfo.sType$Default();
-		dynamicStateCreateInfo.pDynamicStates(stack.ints(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR));
-
-		VkVertexInputBindingDescription.Buffer bindingDescriptions = Model.Vertex.getBindingDecription(stack);
-		VkVertexInputAttributeDescription.Buffer attributeDescriptions = Model.Vertex.getAttributeDescription(stack);
-		
-		VkPipelineVertexInputStateCreateInfo pipelineVertexInputCreateInfo = VkPipelineVertexInputStateCreateInfo.calloc(stack);
-		pipelineVertexInputCreateInfo.sType$Default();
-		pipelineVertexInputCreateInfo.pVertexBindingDescriptions(bindingDescriptions);
-		pipelineVertexInputCreateInfo.pVertexAttributeDescriptions(attributeDescriptions);
-		
-		VkPipelineInputAssemblyStateCreateInfo pipelineInputAssemblyStateCreateInfo = VkPipelineInputAssemblyStateCreateInfo.calloc(stack);
-		pipelineInputAssemblyStateCreateInfo.sType$Default();
-		pipelineInputAssemblyStateCreateInfo.topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-		pipelineInputAssemblyStateCreateInfo.primitiveRestartEnable(false);
-
-		VkViewport.Buffer viewport = VkViewport.calloc(1, stack);
-		viewport.x(0.0f);
-		viewport.y(0.0f);
-		viewport.width(framebufferExtent.width());
-		viewport.height(framebufferExtent.height());
-		viewport.minDepth(0.0f);
-		viewport.maxDepth(1.0f);
-
-		VkOffset2D scissorOffset = VkOffset2D.calloc(stack);
-		scissorOffset.x(0);
-		scissorOffset.y(0);
-
-		VkRect2D.Buffer scissor = VkRect2D.calloc(1, stack);
-		scissor.offset(scissorOffset);
-		scissor.extent(framebufferExtent);
-
-		VkPipelineViewportStateCreateInfo pipelineViewportStateCreateInfo = VkPipelineViewportStateCreateInfo.calloc(stack);
-		pipelineViewportStateCreateInfo.sType$Default();
-		pipelineViewportStateCreateInfo.viewportCount(1);
-		pipelineViewportStateCreateInfo.scissorCount(1);
-		pipelineViewportStateCreateInfo.pViewports(viewport);
-		pipelineViewportStateCreateInfo.pScissors(scissor);
-
-		VkPipelineRasterizationStateCreateInfo pipelineRasterizationStateCreateInfo = VkPipelineRasterizationStateCreateInfo.calloc(stack);
-		pipelineRasterizationStateCreateInfo.sType$Default();
-		pipelineRasterizationStateCreateInfo.depthClampEnable(false);
-		pipelineRasterizationStateCreateInfo.rasterizerDiscardEnable(false);
-		pipelineRasterizationStateCreateInfo.polygonMode(VK_POLYGON_MODE_FILL);
-		pipelineRasterizationStateCreateInfo.lineWidth(1.0f);
-		pipelineRasterizationStateCreateInfo.cullMode(VK_CULL_MODE_BACK_BIT);
-		pipelineRasterizationStateCreateInfo.frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE);
-		pipelineRasterizationStateCreateInfo.depthBiasEnable(false);
-		pipelineRasterizationStateCreateInfo.depthBiasConstantFactor(0.0f);
-		pipelineRasterizationStateCreateInfo.depthBiasClamp(0.0f);
-		pipelineRasterizationStateCreateInfo.depthBiasSlopeFactor(0.0f);
-
-		VkPipelineMultisampleStateCreateInfo pipelineMultisampleStateCreateInfo = VkPipelineMultisampleStateCreateInfo.calloc(stack);
-		pipelineMultisampleStateCreateInfo.sType$Default();
-		pipelineMultisampleStateCreateInfo.sampleShadingEnable(false);
-		pipelineMultisampleStateCreateInfo.rasterizationSamples(VK_SAMPLE_COUNT_1_BIT);
-		pipelineMultisampleStateCreateInfo.minSampleShading(1.0f);
-		pipelineMultisampleStateCreateInfo.alphaToCoverageEnable(false);
-		pipelineMultisampleStateCreateInfo.alphaToOneEnable(false);
-
-		VkPipelineColorBlendAttachmentState.Buffer pipelineColoreBlendAttachmentState = VkPipelineColorBlendAttachmentState.calloc(1, stack);
-		pipelineColoreBlendAttachmentState.colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT);
-		pipelineColoreBlendAttachmentState.blendEnable(true);
-		pipelineColoreBlendAttachmentState.srcColorBlendFactor(VK_BLEND_FACTOR_ONE);
-		pipelineColoreBlendAttachmentState.dstColorBlendFactor(VK_BLEND_FACTOR_ZERO);
-		pipelineColoreBlendAttachmentState.colorBlendOp(VK_BLEND_OP_ADD);
-		pipelineColoreBlendAttachmentState.srcAlphaBlendFactor(VK_BLEND_FACTOR_ONE);
-		pipelineColoreBlendAttachmentState.dstAlphaBlendFactor(VK_BLEND_FACTOR_ZERO);
-		pipelineColoreBlendAttachmentState.alphaBlendOp(VK_BLEND_OP_ADD);
-
-		VkPipelineColorBlendStateCreateInfo pipelineColorBlendStateCreateInfo = VkPipelineColorBlendStateCreateInfo.calloc(stack);
-		pipelineColorBlendStateCreateInfo.sType$Default();
-		pipelineColorBlendStateCreateInfo.logicOpEnable(false);
-		pipelineColorBlendStateCreateInfo.attachmentCount(1);
-		pipelineColorBlendStateCreateInfo.pAttachments(pipelineColoreBlendAttachmentState);
-
-		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = VkPipelineLayoutCreateInfo.calloc(stack);
-		pipelineLayoutCreateInfo.sType$Default();
-		pipelineLayoutCreateInfo.pSetLayouts(stack.longs(descriptorSetLayout));
-		pipelineLayoutCreateInfo.setLayoutCount(1);
-		
-		pipelineLayout = Utils.createPipelineLayout(gpu.device, pipelineLayoutCreateInfo, stack);
-
-		VkGraphicsPipelineCreateInfo.Buffer graphicsPipelineCreateInfo = VkGraphicsPipelineCreateInfo.calloc(1, stack);
-		graphicsPipelineCreateInfo.sType$Default();
-		graphicsPipelineCreateInfo.stageCount(2);
-		graphicsPipelineCreateInfo.pStages(shaderStages);
-		graphicsPipelineCreateInfo.pVertexInputState(pipelineVertexInputCreateInfo);
-		graphicsPipelineCreateInfo.pInputAssemblyState(pipelineInputAssemblyStateCreateInfo);
-		graphicsPipelineCreateInfo.pViewportState(pipelineViewportStateCreateInfo);
-		graphicsPipelineCreateInfo.pRasterizationState(pipelineRasterizationStateCreateInfo);
-		graphicsPipelineCreateInfo.pMultisampleState(pipelineMultisampleStateCreateInfo);
-		graphicsPipelineCreateInfo.pColorBlendState(pipelineColorBlendStateCreateInfo);
-		graphicsPipelineCreateInfo.pDynamicState(dynamicStateCreateInfo);
-		graphicsPipelineCreateInfo.layout(pipelineLayout);
-		graphicsPipelineCreateInfo.renderPass(renderPass);
-		graphicsPipelineCreateInfo.subpass(0);
-
-		graphicsPipeline = Utils.createGraphicsPipeline(gpu.device, graphicsPipelineCreateInfo, stack);
-	}
-
 	
 	private void createRenderPass(MemoryStack stack)
 	{
@@ -532,7 +324,7 @@ public class Engine
 
 	public void run()
 	{
-		while (!glfwWindowShouldClose(window))
+		while (!window.shouldClose())
 		{
 			update();
 			render();
@@ -641,7 +433,7 @@ public class Engine
 
 			vkCmdBeginRenderPass(commandBuffer, renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline.graphicsPipeline);
 
 			VkViewport.Buffer viewport = VkViewport.calloc(1, stack);
 			viewport.x(0.0f);
@@ -670,7 +462,7 @@ public class Engine
 			
 			vkCmdBindIndexBuffer(commandBuffer, model.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 			
-			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, stack.longs(descriptorSets[imageIndex]), null);
+			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline.pipelineLayout, 0, stack.longs(descriptorSets[imageIndex]), null);
 			
 			vkCmdDrawIndexed(commandBuffer, model.indices.length, 1, 0, 0, 0);
 
@@ -706,9 +498,9 @@ public class Engine
 
 		vkDestroyCommandPool(gpu.device, commandPool, null);
 
-		vkDestroyPipeline(gpu.device, graphicsPipeline, null);
 		vkDestroyRenderPass(gpu.device, renderPass, null);
-		vkDestroyPipelineLayout(gpu.device, pipelineLayout, null);
+		
+		graphicsPipeline.__release(gpu);
 
 		for (int i = 0; i < uniformBuffers.length; i++)
 		{
@@ -721,10 +513,6 @@ public class Engine
 		vkDestroyDescriptorPool(gpu.device, descriptorPool, null);
 		
 		vkDestroyDescriptorSetLayout(gpu.device, descriptorSetLayout, null);
-		
-		vkDestroyShaderModule(gpu.device, vertexShaderModule, null);
-		vkDestroyShaderModule(gpu.device, fragmentShaderModule, null);
-
 
 		framebufferExtent.free();
 
@@ -734,9 +522,9 @@ public class Engine
 
 		vkInstance.__release();
 		
-		glfwDestroyWindow(window);
+		window.__release();
 
-		glfwTerminate();
+		GLFWContext.__release();
 	}
 	
 	public void copyBuffer(long srcBuffer, long dstBuffer, int size, MemoryStack stack)

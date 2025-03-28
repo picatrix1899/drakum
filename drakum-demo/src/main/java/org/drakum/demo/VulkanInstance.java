@@ -118,7 +118,7 @@ public class VulkanInstance
 
 				LongBuffer pMessenger = stack.mallocLong(1);
 
-				long debugMessengerHandle = -1;
+				long debugMessengerHandle = 0;
 				if(this.debugMode)
 				{
 					if (EXTDebugUtils.vkCreateDebugUtilsMessengerEXT(handle, debugCreateInfo, null, pMessenger) != VK_SUCCESS)
@@ -145,7 +145,7 @@ public class VulkanInstance
 	
 	public void __release()
 	{
-		if(this.debugMessengerHandle > -1) EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT(handle, debugMessengerHandle, null);
+		if(this.debugMessengerHandle != 0) EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT(handle, debugMessengerHandle, null);
 
 		vkDestroyInstance(handle, null);
 	}
