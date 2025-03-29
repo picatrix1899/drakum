@@ -2,18 +2,14 @@ package org.drakum.demo;
 
 import static org.lwjgl.vulkan.VK14.*;
 
-import org.barghos.util.nullable.longs.NullableL;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkBufferCreateInfo;
-import org.lwjgl.vulkan.VkMemoryAllocateInfo;
 import org.lwjgl.vulkan.VkMemoryRequirements;
 
 public class VulkanBuffer
 {
 	private long handle;
-	private long memoryHandle;
-	private NullableL mappedMemoryHandle = new NullableL();
-	private long size;
+	private VulkanMemory memory;
 	
 	public long handle()
 	{
@@ -22,42 +18,33 @@ public class VulkanBuffer
 	
 	public long memoryHandle()
 	{
-		return this.memoryHandle;
+		return this.memory.handle();
 	}
 	
 	public long mappedMemoryHandle()
 	{
-		return this.mappedMemoryHandle.valueL();
+		return this.memory.mappedHandle();
 	}
 	
 	public boolean isMapped()
 	{
-		return this.mappedMemoryHandle.isNotNull();
+		return this.memory.isMapped();
 	}
 	
 	public void map()
 	{
-		if(this.isMapped()) return;
-		
-		try(MemoryStack stack = MemoryStack.stackPush())
-		{
-			mappedMemoryHandle.value(Utils.mapMemory(CommonRenderContext.instance().gpu.device, this.memoryHandle, 0, size, 0, stack));
-		}
+		this.memory.map();
 	}
 	
 	public void unmap()
 	{
-		if(!this.isMapped()) return;
-		
-		if(this.mappedMemoryHandle.isNotNull()) vkUnmapMemory(CommonRenderContext.instance().gpu.device, this.memoryHandle);
-		this.mappedMemoryHandle.setNull();
+		this.memory.unmap();
 	}
 	
 	public void __release()
 	{
-		if(this.mappedMemoryHandle.isNotNull()) unmap();
 		vkDestroyBuffer(CommonRenderContext.instance().gpu.device, handle, null);
-		vkFreeMemory(CommonRenderContext.instance().gpu.device, memoryHandle, null);
+		this.memory.__release();
 	}
 	
 	public static class Builder
@@ -111,19 +98,16 @@ public class VulkanBuffer
 				
 				vkGetBufferMemoryRequirements(CommonRenderContext.instance().gpu.device, buffer, memoryRequirements);
 				
-				VkMemoryAllocateInfo memoryAllocateInfo = VkMemoryAllocateInfo.calloc(stack);
-				memoryAllocateInfo.sType$Default();
-				memoryAllocateInfo.allocationSize(memoryRequirements.size());
-				memoryAllocateInfo.memoryTypeIndex(CommonRenderContext.instance().gpu.findMemoryType(memoryRequirements.memoryTypeBits(), this.properties, stack));
+				VulkanMemory memory = new VulkanMemory.Builder()
+					.size(memoryRequirements.size())
+					.memoryTypeBits(memoryRequirements.memoryTypeBits())
+					.properties(this.properties).create();
 				
-				long bufferMemory = Utils.allocateMemory(CommonRenderContext.instance().gpu.device, memoryAllocateInfo, stack);
-				
-				vkBindBufferMemory(CommonRenderContext.instance().gpu.device, buffer, bufferMemory, 0);
+				vkBindBufferMemory(CommonRenderContext.instance().gpu.device, buffer, memory.handle(), 0);
 				
 				VulkanBuffer result = new VulkanBuffer();
 				result.handle = buffer;
-				result.memoryHandle = bufferMemory;
-				result.size = size;
+				result.memory = memory;
 				
 				return result;
 			}

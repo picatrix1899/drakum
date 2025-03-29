@@ -4,6 +4,9 @@ import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.vulkan.VK14.*;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
+import static org.lwjgl.vulkan.VK10.VK_IMAGE_VIEW_TYPE_2D;
+import static org.lwjgl.vulkan.VK10.vkDestroyFramebuffer;
+import static org.lwjgl.vulkan.VK10.vkDestroyImageView;
 
 import java.lang.foreign.ValueLayout;
 import java.nio.FloatBuffer;
@@ -29,6 +32,11 @@ import org.lwjgl.vulkan.VkDescriptorSetAllocateInfo;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutBinding;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutCreateInfo;
 import org.lwjgl.vulkan.VkExtent2D;
+import org.lwjgl.vulkan.VkFramebufferCreateInfo;
+import org.lwjgl.vulkan.VkImageBlit;
+import org.lwjgl.vulkan.VkImageMemoryBarrier;
+import org.lwjgl.vulkan.VkImageSubresourceRange;
+import org.lwjgl.vulkan.VkImageViewCreateInfo;
 import org.lwjgl.vulkan.VkOffset2D;
 import org.lwjgl.vulkan.VkPresentInfoKHR;
 import org.lwjgl.vulkan.VkRect2D;
@@ -48,7 +56,11 @@ public class Engine
 	private Pipeline graphicsPipeline;
 	
 	private long renderPass;
-
+	private long presentRenderPass;
+	private VkImage sceneImage;
+	public long sceneImageView;
+	public long sceneFramebuffer;
+	
 	private VkCommandBuffer commandBuffer;
 
 	private Semaphore imageAvailableSemaphore;
@@ -100,6 +112,7 @@ public class Engine
 			CommonRenderContext.instance().gpu = gpu;
 			
 			createRenderPass(stack);
+			createPresentRenderPass(stack);
 			
 			VkSurfaceCapabilitiesKHR surfaceCapabilities = Utils.getPhysicalDeviceSurfaceCapabilities(gpu.physicalDevice, windowRenderContext.surface, stack);
 
@@ -119,7 +132,37 @@ public class Engine
 			windowRenderContext.swapchainImageCount = imageCount;
 			
 			windowRenderContext.swapchain = new Swapchain();
-			windowRenderContext.swapchain.create(surfaceCapabilities, actualExtent.width(), actualExtent.height(), windowRenderContext.surface, renderPass, windowRenderContext.swapchainImageCount);
+			windowRenderContext.swapchain.create(surfaceCapabilities, actualExtent.width(), actualExtent.height(), windowRenderContext.surface, presentRenderPass, windowRenderContext.swapchainImageCount);
+			
+			sceneImage = new VkImage.Builder()
+				.width(windowRenderContext.framebufferExtent.width())
+				.height(windowRenderContext.framebufferExtent.height())
+				.create();
+			
+			VkImageViewCreateInfo imageViewCreateInfo = VkImageViewCreateInfo.calloc(stack);
+			imageViewCreateInfo.sType$Default();
+			imageViewCreateInfo.image(sceneImage.handle);
+			imageViewCreateInfo.viewType(VK_IMAGE_VIEW_TYPE_2D);
+			imageViewCreateInfo.format(VK_FORMAT_B8G8R8A8_SRGB);
+			imageViewCreateInfo.subresourceRange(VkImageSubresourceRange.calloc(stack) 
+					.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+					.baseMipLevel(0)
+					.levelCount(1)
+					.baseArrayLayer(0)
+					.layerCount(1));
+			
+			sceneImageView = Utils.createImageView(CommonRenderContext.instance().gpu.device, imageViewCreateInfo, stack);
+			
+			VkFramebufferCreateInfo framebufferCreateInfo = VkFramebufferCreateInfo.calloc(stack);
+			framebufferCreateInfo.sType$Default();
+			framebufferCreateInfo.renderPass(renderPass);
+			framebufferCreateInfo.attachmentCount(1);
+			framebufferCreateInfo.pAttachments(stack.longs(sceneImageView));
+			framebufferCreateInfo.width(windowRenderContext.framebufferExtent.width());
+			framebufferCreateInfo.height(windowRenderContext.framebufferExtent.height());
+			framebufferCreateInfo.layers(1);
+			
+			sceneFramebuffer = Utils.createFramebuffer(CommonRenderContext.instance().gpu.device, framebufferCreateInfo, stack);
 			
 			createDescriptorSetLayout(stack);
 
@@ -227,7 +270,7 @@ public class Engine
 		colorAttachment.stencilLoadOp(VK_ATTACHMENT_STORE_OP_DONT_CARE);
 		colorAttachment.stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE);
 		colorAttachment.initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
-		colorAttachment.finalLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		colorAttachment.finalLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 		VkAttachmentReference.Buffer colorAttachmentRef = VkAttachmentReference.calloc(1, stack);
 		colorAttachmentRef.attachment(0);
@@ -253,6 +296,44 @@ public class Engine
 		renderPassCreateInfo.pDependencies(subpassDependency);
 
 		renderPass = Utils.createRenderPass(CommonRenderContext.instance().gpu.device, renderPassCreateInfo, stack);
+	}
+	
+	private void createPresentRenderPass(MemoryStack stack)
+	{
+		VkAttachmentDescription.Buffer colorAttachment = VkAttachmentDescription.calloc(1, stack);
+		colorAttachment.format(windowRenderContext.swapchainFormat);
+		colorAttachment.samples(VK_SAMPLE_COUNT_1_BIT);
+		colorAttachment.loadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE);
+		colorAttachment.storeOp(VK_ATTACHMENT_STORE_OP_STORE);
+		colorAttachment.stencilLoadOp(VK_ATTACHMENT_STORE_OP_DONT_CARE);
+		colorAttachment.stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE);
+		colorAttachment.initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
+		colorAttachment.finalLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+		VkAttachmentReference.Buffer colorAttachmentRef = VkAttachmentReference.calloc(1, stack);
+		colorAttachmentRef.attachment(0);
+		colorAttachmentRef.layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+		VkSubpassDescription.Buffer subpass = VkSubpassDescription.calloc(1, stack);
+		subpass.pipelineBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
+		subpass.colorAttachmentCount(1);
+		subpass.pColorAttachments(colorAttachmentRef);
+
+		VkSubpassDependency.Buffer subpassDependency = VkSubpassDependency.calloc(1, stack);
+		subpassDependency.srcSubpass(VK_SUBPASS_EXTERNAL);
+		subpassDependency.dstSubpass(0);
+		subpassDependency.srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+		subpassDependency.srcAccessMask(0);
+		subpassDependency.dstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+		subpassDependency.dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+
+		VkRenderPassCreateInfo renderPassCreateInfo = VkRenderPassCreateInfo.calloc(stack);
+		renderPassCreateInfo.sType$Default();
+		renderPassCreateInfo.pAttachments(colorAttachment);
+		renderPassCreateInfo.pSubpasses(subpass);
+		renderPassCreateInfo.pDependencies(subpassDependency);
+
+		presentRenderPass = Utils.createRenderPass(CommonRenderContext.instance().gpu.device, renderPassCreateInfo, stack);
 	}
 	
 	private void initUniformBuffers(MemoryStack stack)
@@ -384,18 +465,44 @@ public class Engine
 			renderArea.extent(windowRenderContext.framebufferExtent);
 
 			VkClearColorValue clearColorValue = VkClearColorValue.calloc(stack);
-			clearColorValue.float32(0, 0.0f);
-			clearColorValue.float32(1, 0.0f);
+			clearColorValue.float32(0, 1.0f);
+			clearColorValue.float32(1, 1.0f);
 			clearColorValue.float32(2, 0.0f);
 			clearColorValue.float32(3, 1.0f);
 
 			VkClearValue.Buffer clearColor = VkClearValue.calloc(1, stack);
 			clearColor.color(clearColorValue);
 
+			VkImageMemoryBarrier.Buffer sceneInitBarrier = VkImageMemoryBarrier.calloc(1, stack);
+			sceneInitBarrier.get(0)
+			    .sType$Default()
+			    .oldLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+			    .newLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+			    .srcAccessMask(0)
+			    .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+			    .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+			    .dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+			    .image(sceneImage.handle)
+			    .subresourceRange(VkImageSubresourceRange.calloc(stack) 
+					.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+					.baseMipLevel(0)
+					.levelCount(1)
+					.baseArrayLayer(0)
+					.layerCount(1));
+
+			vkCmdPipelineBarrier(
+			    commandBuffer,
+			    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			    0,
+			    null, null,
+			    sceneInitBarrier
+			);
+			
 			VkRenderPassBeginInfo renderPassBeginInfo = VkRenderPassBeginInfo.calloc(stack);
 			renderPassBeginInfo.sType$Default();
 			renderPassBeginInfo.renderPass(renderPass);
-			renderPassBeginInfo.framebuffer(windowRenderContext.swapchain.swapchainFramebuffers[imageIndex]);
+			renderPassBeginInfo.framebuffer(sceneFramebuffer);
 			renderPassBeginInfo.renderArea(renderArea);
 			renderPassBeginInfo.clearValueCount(1);
 			renderPassBeginInfo.pClearValues(clearColor);
@@ -437,6 +544,100 @@ public class Engine
 
 			vkCmdEndRenderPass(commandBuffer);
 
+			VkImageMemoryBarrier.Buffer imageMemoryBarrier1 = VkImageMemoryBarrier.calloc(1, stack);
+			imageMemoryBarrier1.sType$Default();
+			imageMemoryBarrier1.oldLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+			imageMemoryBarrier1.newLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+			imageMemoryBarrier1.srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT);
+			imageMemoryBarrier1.dstAccessMask(VK_ACCESS_TRANSFER_READ_BIT);
+			imageMemoryBarrier1.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+			imageMemoryBarrier1.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+			imageMemoryBarrier1.image(sceneImage.handle);
+			imageMemoryBarrier1.subresourceRange(VkImageSubresourceRange.calloc(stack) 
+				.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+				.baseMipLevel(0)
+				.levelCount(1)
+				.baseArrayLayer(0)
+				.layerCount(1));
+			
+			vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, imageMemoryBarrier1);
+			
+			long[] swapchainImages = Utils.getSwapchainImages(CommonRenderContext.instance().gpu.device, windowRenderContext.swapchain.swapchain, stack);
+			
+			VkImageMemoryBarrier.Buffer imageMemoryBarrier2 = VkImageMemoryBarrier.calloc(1, stack);
+			imageMemoryBarrier2.sType$Default();
+			imageMemoryBarrier2.oldLayout(VK_IMAGE_LAYOUT_UNDEFINED);
+			imageMemoryBarrier2.newLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			imageMemoryBarrier2.srcAccessMask(0);
+			imageMemoryBarrier2.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+			imageMemoryBarrier2.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+			imageMemoryBarrier2.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+			imageMemoryBarrier2.image(swapchainImages[imageIndex]);
+			imageMemoryBarrier2.subresourceRange(VkImageSubresourceRange.calloc(stack) 
+				.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+				.baseMipLevel(0)
+				.levelCount(1)
+				.baseArrayLayer(0)
+				.layerCount(1));
+			
+			vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT , VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, imageMemoryBarrier2);
+			
+			VkImageBlit.Buffer blitRegion = VkImageBlit.calloc(1, stack);
+
+			// Source: full scene image
+			blitRegion.srcSubresource().aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+			blitRegion.srcSubresource().mipLevel(0);
+			blitRegion.srcSubresource().baseArrayLayer(0);
+			blitRegion.srcSubresource().layerCount(1);
+			blitRegion.srcOffsets(0).set(0, 0, 0);
+			blitRegion.srcOffsets(1).set(windowRenderContext.framebufferExtent.width(), windowRenderContext.framebufferExtent.height(), 1);
+
+			// Destination: full swapchain image
+			blitRegion.dstSubresource().aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+			blitRegion.dstSubresource().mipLevel(0);
+			blitRegion.dstSubresource().baseArrayLayer(0);
+			blitRegion.dstSubresource().layerCount(1);
+			blitRegion.dstOffsets(0).set(0, 0, 0);
+			blitRegion.dstOffsets(1).set(windowRenderContext.framebufferExtent.width(), windowRenderContext.framebufferExtent.height(), 1);
+			
+			vkCmdBlitImage(commandBuffer, sceneImage.handle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, swapchainImages[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blitRegion, VK_FILTER_LINEAR );
+			
+			VkImageMemoryBarrier.Buffer imageMemoryBarrier3 = VkImageMemoryBarrier.calloc(1, stack);
+			imageMemoryBarrier3.sType$Default();
+			imageMemoryBarrier3.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			imageMemoryBarrier3.newLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+			imageMemoryBarrier3.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+			imageMemoryBarrier3.dstAccessMask(0);
+			imageMemoryBarrier3.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+			imageMemoryBarrier3.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+			imageMemoryBarrier3.image(swapchainImages[imageIndex]);
+			imageMemoryBarrier3.subresourceRange(VkImageSubresourceRange.calloc(stack) 
+				.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+				.baseMipLevel(0)
+				.levelCount(1)
+				.baseArrayLayer(0)
+				.layerCount(1));
+			
+			vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, null, null, imageMemoryBarrier3);
+			
+			VkImageMemoryBarrier.Buffer imageMemoryBarrier4 = VkImageMemoryBarrier.calloc(1, stack);
+			imageMemoryBarrier4.sType$Default();
+			imageMemoryBarrier4.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+			imageMemoryBarrier4.newLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			imageMemoryBarrier4.srcAccessMask(VK_ACCESS_TRANSFER_READ_BIT);
+			imageMemoryBarrier4.dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT);
+			imageMemoryBarrier4.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+			imageMemoryBarrier4.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+			imageMemoryBarrier4.image(sceneImage.handle);
+			imageMemoryBarrier4.subresourceRange(VkImageSubresourceRange.calloc(stack) 
+				.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+				.baseMipLevel(0)
+				.levelCount(1)
+				.baseArrayLayer(0)
+				.layerCount(1));
+			
+			vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, null, null, imageMemoryBarrier4);
+			
 			vkEndCommandBuffer(commandBuffer);
 		}
 	}
@@ -464,6 +665,7 @@ public class Engine
 		vkDestroyCommandPool(CommonRenderContext.instance().gpu.device, CommonRenderContext.instance().commandPool, null);
 
 		vkDestroyRenderPass(CommonRenderContext.instance().gpu.device, renderPass, null);
+		vkDestroyRenderPass(CommonRenderContext.instance().gpu.device, presentRenderPass, null);
 		
 		graphicsPipeline.__release();
 
@@ -471,7 +673,13 @@ public class Engine
 		{
 			uniformBuffers[i].__release();
 		}
-
+		
+		vkDestroyFramebuffer(CommonRenderContext.instance().gpu.device, sceneFramebuffer, null);
+		
+		vkDestroyImageView(CommonRenderContext.instance().gpu.device, sceneImageView, null);
+		
+		sceneImage.__release();
+		
 		windowRenderContext.swapchain.__release();
 		
 		vkDestroyDescriptorPool(CommonRenderContext.instance().gpu.device, descriptorPool, null);
