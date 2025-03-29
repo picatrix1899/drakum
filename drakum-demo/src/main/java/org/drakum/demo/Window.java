@@ -28,12 +28,37 @@ public class Window
 	
 	public static class Builder
 	{
+		private int width;
+		private int height;
+		private String title;
+		
+		public Builder width(int width)
+		{
+			this.width = width;
+			
+			return this;
+		}
+		
+		public Builder height(int height)
+		{
+			this.height = height;
+			
+			return this;
+		}
+		
+		public Builder title(String title)
+		{
+			this.title = title;
+			
+			return this;
+		}
+		
 		public Window create()
 		{
 			glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 			glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-			long handle = glfwCreateWindow(800, 600, "Drakum Demo", 0, 0);
+			long handle = glfwCreateWindow(width, height, title, 0, 0);
 
 			if (handle == 0)
 			{

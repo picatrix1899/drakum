@@ -33,23 +33,23 @@ public class Pipeline
 		
 	}
 	
-	public void __release(GPU gpu)
+	public void __release()
 	{
-		vkDestroyPipeline(gpu.device, graphicsPipeline, null);
-		vkDestroyPipelineLayout(gpu.device, pipelineLayout, null);
+		vkDestroyPipeline(CommonRenderContext.instance().gpu.device, graphicsPipeline, null);
+		vkDestroyPipelineLayout(CommonRenderContext.instance().gpu.device, pipelineLayout, null);
 		
-		vertexShaderModule.__release(gpu);
-		fragmentShaderModule.__release(gpu);
+		vertexShaderModule.__release();
+		fragmentShaderModule.__release();
 	}
 	
 	public static class Builder
 	{
-		public Pipeline create(GPU gpu, VkExtent2D framebufferExtent, long descriptorSetLayout, long renderPass, VkVertexInputBindingDescription.Buffer bindingDescriptions, VkVertexInputAttributeDescription.Buffer attributeDescriptions)
+		public Pipeline create(VkExtent2D framebufferExtent, long descriptorSetLayout, long renderPass, VkVertexInputBindingDescription.Buffer bindingDescriptions, VkVertexInputAttributeDescription.Buffer attributeDescriptions)
 		{
 			try (MemoryStack stack = MemoryStack.stackPush())
 			{
-				ShaderModule vertexShaderModule = new ShaderModule.Builder().create(gpu, "/vert.spv");
-				ShaderModule fragmentShaderModule = new ShaderModule.Builder().create(gpu, "/frag.spv");
+				ShaderModule vertexShaderModule = new ShaderModule.Builder().create("/vert.spv");
+				ShaderModule fragmentShaderModule = new ShaderModule.Builder().create("/frag.spv");
 
 				VkPipelineShaderStageCreateInfo.Buffer shaderStages = VkPipelineShaderStageCreateInfo.calloc(2, stack);
 				shaderStages.get(0).sType$Default();
@@ -140,7 +140,7 @@ public class Pipeline
 				pipelineLayoutCreateInfo.pSetLayouts(stack.longs(descriptorSetLayout));
 				pipelineLayoutCreateInfo.setLayoutCount(1);
 				
-				long pipelineLayout = Utils.createPipelineLayout(gpu.device, pipelineLayoutCreateInfo, stack);
+				long pipelineLayout = Utils.createPipelineLayout(CommonRenderContext.instance().gpu.device, pipelineLayoutCreateInfo, stack);
 
 				VkGraphicsPipelineCreateInfo.Buffer graphicsPipelineCreateInfo = VkGraphicsPipelineCreateInfo.calloc(1, stack);
 				graphicsPipelineCreateInfo.sType$Default();
@@ -157,7 +157,7 @@ public class Pipeline
 				graphicsPipelineCreateInfo.renderPass(renderPass);
 				graphicsPipelineCreateInfo.subpass(0);
 
-				long graphicsPipeline = Utils.createGraphicsPipeline(gpu.device, graphicsPipelineCreateInfo, stack);
+				long graphicsPipeline = Utils.createGraphicsPipeline(CommonRenderContext.instance().gpu.device, graphicsPipelineCreateInfo, stack);
 				
 				Pipeline result = new Pipeline();
 				result.vertexShaderModule = vertexShaderModule;

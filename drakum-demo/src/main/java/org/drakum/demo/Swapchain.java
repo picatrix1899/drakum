@@ -8,7 +8,6 @@ import java.nio.IntBuffer;
 
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkComponentMapping;
-import org.lwjgl.vulkan.VkDevice;
 import org.lwjgl.vulkan.VkExtent2D;
 import org.lwjgl.vulkan.VkFramebufferCreateInfo;
 import org.lwjgl.vulkan.VkImageSubresourceRange;
@@ -25,7 +24,7 @@ public class Swapchain
 	public int swapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
 	public int swapchainColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 	
-	public void create(VkSurfaceCapabilitiesKHR surfaceCapabilities, int width, int height, VkDevice device, long surface, QueueFamilyList queueFamilies, long renderPass, int imageCount)
+	public void create(VkSurfaceCapabilitiesKHR surfaceCapabilities, int width, int height, long surface, long renderPass, int imageCount)
 	{
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
@@ -35,10 +34,10 @@ public class Swapchain
 			
 			int sharingMode = 0;
 			IntBuffer familyIndices = null;
-			if(queueFamilies.graphicsFamily != queueFamilies.presentFamily)
+			if(CommonRenderContext.instance().gpu.queueFamilies.graphicsFamily != CommonRenderContext.instance().gpu.queueFamilies.presentFamily)
 			{
 				sharingMode = VK_SHARING_MODE_CONCURRENT;
-				familyIndices = stack.ints(queueFamilies.graphicsFamily, queueFamilies.presentFamily);
+				familyIndices = stack.ints(CommonRenderContext.instance().gpu.queueFamilies.graphicsFamily, CommonRenderContext.instance().gpu.queueFamilies.presentFamily);
 			}
 			else
 			{
@@ -61,9 +60,9 @@ public class Swapchain
 			swapchainCreateInfo.presentMode(VK_PRESENT_MODE_MAILBOX_KHR);
 			swapchainCreateInfo.clipped(true);
 			
-			swapchain = Utils.createSwapchain(device, swapchainCreateInfo, stack);
+			swapchain = Utils.createSwapchain(CommonRenderContext.instance().gpu.device, swapchainCreateInfo, stack);
 
-			long[] swapchainImages = Utils.getSwapchainImages(device, swapchain, stack);
+			long[] swapchainImages = Utils.getSwapchainImages(CommonRenderContext.instance().gpu.device, swapchain, stack);
 			swapchainImageViews = new long[swapchainImages.length];
 
 			for(int i = 0; i < swapchainImages.length; i++)
@@ -89,7 +88,7 @@ public class Swapchain
 				imageViewCreateInfo.components(componentMapping);
 				imageViewCreateInfo.subresourceRange(subresourceRange);
 
-				swapchainImageViews[i] = Utils.createImageView(device, imageViewCreateInfo, stack);
+				swapchainImageViews[i] = Utils.createImageView(CommonRenderContext.instance().gpu.device, imageViewCreateInfo, stack);
 			}
 			
 			swapchainFramebuffers = new long[swapchainImageViews.length];
@@ -105,23 +104,31 @@ public class Swapchain
 				framebufferCreateInfo.height(height);
 				framebufferCreateInfo.layers(1);
 
-				swapchainFramebuffers[i] = Utils.createFramebuffer(device, framebufferCreateInfo, stack);
+				swapchainFramebuffers[i] = Utils.createFramebuffer(CommonRenderContext.instance().gpu.device, framebufferCreateInfo, stack);
 			}
 		}
 	}
 	
-	public void __release(VkDevice device)
+	public int acquireNextImage(Semaphore imageAvailableSemaphore)
+	{	
+		try(MemoryStack stack = MemoryStack.stackPush())
+		{
+			return Utils.acquireNextImage(CommonRenderContext.instance().gpu.device, swapchain, imageAvailableSemaphore.handle(), stack);
+		}
+	}
+	
+	public void __release()
 	{
 		for(long framebuffer : swapchainFramebuffers)
 		{
-			vkDestroyFramebuffer(device, framebuffer, null);
+			vkDestroyFramebuffer(CommonRenderContext.instance().gpu.device, framebuffer, null);
 		}
 		
 		for(long imageView : swapchainImageViews)
 		{
-			vkDestroyImageView(device, imageView, null);
+			vkDestroyImageView(CommonRenderContext.instance().gpu.device, imageView, null);
 		}
 		
-		vkDestroySwapchainKHR(device, swapchain, null);
+		vkDestroySwapchainKHR(CommonRenderContext.instance().gpu.device, swapchain, null);
 	}
 }

@@ -2,8 +2,6 @@ package org.drakum.demo;
 
 import static org.lwjgl.glfw.GLFWVulkan.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
-import static org.lwjgl.vulkan.VK10.vkDestroyDevice;
-import static org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceMemoryProperties;
 import static org.lwjgl.vulkan.VK14.*;
 
 import org.lwjgl.PointerBuffer;
@@ -11,7 +9,6 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkDevice;
 import org.lwjgl.vulkan.VkDeviceCreateInfo;
 import org.lwjgl.vulkan.VkDeviceQueueCreateInfo;
-import org.lwjgl.vulkan.VkInstance;
 import org.lwjgl.vulkan.VkPhysicalDevice;
 import org.lwjgl.vulkan.VkPhysicalDeviceFeatures;
 import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties;
@@ -33,9 +30,9 @@ public class GPU
 		memoryProperties = VkPhysicalDeviceMemoryProperties.calloc();
 	}
 	
-	public void initDevice(VkInstance vkInstance, long surface, MemoryStack stack)
+	public void initDevice(long surface, MemoryStack stack)
 	{
-		VkPhysicalDevice[] physicalDevices = Utils.enumeratePhysicalDevices(vkInstance, stack);
+		VkPhysicalDevice[] physicalDevices = Utils.enumeratePhysicalDevices(CommonRenderContext.instance().vkInstance.handle(), stack);
 
 		for (VkPhysicalDevice physDevice : physicalDevices)
 		{
@@ -115,6 +112,8 @@ public class GPU
 
 		graphicsQueue = Utils.getDeviceQueue(device, queueFamilies.graphicsFamily, 0, stack);
 		presentQueue = Utils.getDeviceQueue(device, queueFamilies.presentFamily, 0, stack);
+		
+		vkGetPhysicalDeviceMemoryProperties(physicalDevice, memoryProperties);
 	}
 	
 	public boolean isDeviceSuitable(VkPhysicalDevice device, MemoryStack stack)
@@ -130,8 +129,6 @@ public class GPU
 	
 	public int findMemoryType(int typeFilter, int properties, MemoryStack stack)
 	{
-		vkGetPhysicalDeviceMemoryProperties(physicalDevice, memoryProperties);
-		
 		for(int i = 0; i < memoryProperties.memoryTypeCount(); i++)
 		{
 			if((typeFilter & (1 << i)) != 0 && (memoryProperties.memoryTypes(i).propertyFlags() & properties) == properties)

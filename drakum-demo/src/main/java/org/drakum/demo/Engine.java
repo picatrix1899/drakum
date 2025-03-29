@@ -10,15 +10,12 @@ import java.nio.FloatBuffer;
 import java.nio.LongBuffer;
 import java.util.Arrays;
 
-import org.barghos.util.byref.ByRef;
 import org.barghos.util.math.MathUtils;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.VkAttachmentDescription;
 import org.lwjgl.vulkan.VkAttachmentReference;
-import org.lwjgl.vulkan.VkBufferCopy;
-import org.lwjgl.vulkan.VkBufferCreateInfo;
 import org.lwjgl.vulkan.VkClearColorValue;
 import org.lwjgl.vulkan.VkClearValue;
 import org.lwjgl.vulkan.VkCommandBuffer;
@@ -32,16 +29,11 @@ import org.lwjgl.vulkan.VkDescriptorSetAllocateInfo;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutBinding;
 import org.lwjgl.vulkan.VkDescriptorSetLayoutCreateInfo;
 import org.lwjgl.vulkan.VkExtent2D;
-import org.lwjgl.vulkan.VkFenceCreateInfo;
-import org.lwjgl.vulkan.VkMemoryAllocateInfo;
-import org.lwjgl.vulkan.VkMemoryRequirements;
 import org.lwjgl.vulkan.VkOffset2D;
-import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties;
 import org.lwjgl.vulkan.VkPresentInfoKHR;
 import org.lwjgl.vulkan.VkRect2D;
 import org.lwjgl.vulkan.VkRenderPassBeginInfo;
 import org.lwjgl.vulkan.VkRenderPassCreateInfo;
-import org.lwjgl.vulkan.VkSemaphoreCreateInfo;
 import org.lwjgl.vulkan.VkSubmitInfo;
 import org.lwjgl.vulkan.VkSubpassDependency;
 import org.lwjgl.vulkan.VkSubpassDescription;
@@ -51,43 +43,27 @@ import org.lwjgl.vulkan.VkWriteDescriptorSet;
 
 public class Engine
 {
-	private VulkanInstance vkInstance;
-	
-	private GPU gpu;
-	
-	private Window window;
-	private long surface = 0;
+	private WindowRenderContext windowRenderContext;
 
-	private VkExtent2D framebufferExtent;
-
+	private Pipeline graphicsPipeline;
+	
 	private long renderPass;
 
-	private long commandPool;
 	private VkCommandBuffer commandBuffer;
 
-	private long imageAvailableSemaphore;
-	private long renderFinishedSemaphore;
-	private long inFlightFence;
-
-	private int swapchainImageCount;
-	public int swapchainFormat = VK_FORMAT_B8G8R8A8_SRGB;
-	public int swapchainColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-	private Swapchain swapchain;
+	private Semaphore imageAvailableSemaphore;
+	private Semaphore renderFinishedSemaphore;
+	private Fence inFlightFence;
 	
 	private long descriptorSetLayout;
 	
-	private long lastTime;
-	
 	private long descriptorPool;
 	private long[] descriptorSets;
-	private long[] uniformBuffers = null;
-	private long[] uniformBuffersMemory = null;
-	private long[] uniformBuffersMappedMemory = null;
+	private VulkanBuffer[] uniformBuffers;
 	
 	private Model model;
-	
-	private Pipeline graphicsPipeline;
-	
+	private long lastTime;
+
 	public void start()
 	{
 		__init();
@@ -99,49 +75,76 @@ public class Engine
 
 	public void __init()
 	{
-		GLFWContext.__init();
-
-		window = new Window.Builder().create();
-		
 		try (MemoryStack stack = MemoryStack.stackPush())
 		{
-			vkInstance = new VulkanInstance.Builder()
+			GLFWContext.__init();
+
+			CommonRenderContext.instance().vkInstance = new VulkanInstance.Builder()
 				.applicationName("Drakum Demo")
 				.engineName("Drakum")
 				.debugMode(true)
 				.create();
 			
-			initSurface(stack);
+			windowRenderContext = new WindowRenderContext();
+			
+			windowRenderContext.window = new Window.Builder()
+				.width(800)
+				.height(600)
+				.title("Drakum Demo")
+				.create();
+			
+			windowRenderContext.surface = Utils.createWindowSurface(CommonRenderContext.instance().vkInstance.handle(), windowRenderContext.window.handle, stack);
 
-			gpu = new GPU();
-			gpu.initDevice(vkInstance.handle(), surface, stack);
+			GPU gpu = new GPU();
+			gpu.initDevice(windowRenderContext.surface, stack);
+			CommonRenderContext.instance().gpu = gpu;
 			
 			createRenderPass(stack);
-			initSwapchain(stack);
+			
+			VkSurfaceCapabilitiesKHR surfaceCapabilities = Utils.getPhysicalDeviceSurfaceCapabilities(gpu.physicalDevice, windowRenderContext.surface, stack);
+
+			VkExtent2D actualExtent = Utils.getFramebufferSize(windowRenderContext.window.handle, stack);
+
+			windowRenderContext.framebufferExtent = VkExtent2D.calloc();
+
+			windowRenderContext.framebufferExtent.width(Math.clamp(actualExtent.width(), surfaceCapabilities.minImageExtent().width(), surfaceCapabilities.maxImageExtent().width()));
+			windowRenderContext.framebufferExtent.height(Math.clamp(actualExtent.height(), surfaceCapabilities.minImageExtent().height(), surfaceCapabilities.maxImageExtent().height()));
+
+			int imageCount = surfaceCapabilities.minImageCount() + 1;
+			if (surfaceCapabilities.maxImageCount() > 0)
+			{
+				imageCount = Math.clamp(imageCount, surfaceCapabilities.minImageCount(), surfaceCapabilities.maxImageCount());
+			}
+			
+			windowRenderContext.swapchainImageCount = imageCount;
+			
+			windowRenderContext.swapchain = new Swapchain();
+			windowRenderContext.swapchain.create(surfaceCapabilities, actualExtent.width(), actualExtent.height(), windowRenderContext.surface, renderPass, windowRenderContext.swapchainImageCount);
+			
 			createDescriptorSetLayout(stack);
 
-			graphicsPipeline = new Pipeline.Builder().create(gpu, framebufferExtent, descriptorSetLayout, renderPass, Model.Vertex.getBindingDecription(stack), Model.Vertex.getAttributeDescription(stack));
+			graphicsPipeline = new Pipeline.Builder().create(windowRenderContext.framebufferExtent, descriptorSetLayout, renderPass, Model.Vertex.getBindingDecription(stack), Model.Vertex.getAttributeDescription(stack));
 			
 			initCommandBuffer(stack);
 			createSyncObjects(stack);
 
 			model = new Model();
-			model.createVertexBuffer(gpu, commandPool, stack);
-			model.createIndexBuffer(gpu, commandPool, stack);
+			model.createVertexBuffer(stack);
+			model.createIndexBuffer(stack);
 
 			initUniformBuffers(stack);
 			createDescriptorPool(stack);
 			createDescriptorSets(stack);
 			
-			window.show();
-		}
+			windowRenderContext.window.show();
 		
-		lastTime = System.nanoTime();
+			lastTime = System.nanoTime();
+		}
 	}
 
 	private void createDescriptorSets(MemoryStack stack)
 	{
-		long[] layouts = new long[swapchainImageCount];
+		long[] layouts = new long[windowRenderContext.swapchainImageCount];
 		Arrays.fill(layouts, descriptorSetLayout);
 		
 		VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = VkDescriptorSetAllocateInfo.calloc(stack);
@@ -149,18 +152,18 @@ public class Engine
 		descriptorSetAllocateInfo.descriptorPool(descriptorPool);
 		descriptorSetAllocateInfo.pSetLayouts(stack.longs(layouts));
 		
-		LongBuffer buf = stack.callocLong(swapchainImageCount);
+		LongBuffer buf = stack.callocLong(windowRenderContext.swapchainImageCount);
 		
-		vkAllocateDescriptorSets(gpu.device, descriptorSetAllocateInfo, buf);
+		vkAllocateDescriptorSets(CommonRenderContext.instance().gpu.device, descriptorSetAllocateInfo, buf);
 		
-		descriptorSets = new long[swapchainImageCount];
+		descriptorSets = new long[windowRenderContext.swapchainImageCount];
 		
 		buf.get(descriptorSets);
 		
-		for(int i = 0; i < swapchainImageCount; i++)
+		for(int i = 0; i < windowRenderContext.swapchainImageCount; i++)
 		{
 			VkDescriptorBufferInfo.Buffer descriptorBufferInfo = VkDescriptorBufferInfo.calloc(1, stack);
-			descriptorBufferInfo.buffer(uniformBuffers[i]);
+			descriptorBufferInfo.buffer(uniformBuffers[i].handle());
 			descriptorBufferInfo.offset(0);
 			descriptorBufferInfo.range(UBO.byteSize());
 			
@@ -173,7 +176,7 @@ public class Engine
 			writeDescriptorSet.descriptorCount(1);
 			writeDescriptorSet.pBufferInfo(descriptorBufferInfo);
 			
-			vkUpdateDescriptorSets(gpu.device, writeDescriptorSet, null);
+			vkUpdateDescriptorSets(CommonRenderContext.instance().gpu.device, writeDescriptorSet, null);
 		}
 	}
 	
@@ -181,16 +184,16 @@ public class Engine
 	{
 		VkDescriptorPoolSize.Buffer descriptorPoolSize = VkDescriptorPoolSize.calloc(1, stack);
 		descriptorPoolSize.type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-		descriptorPoolSize.descriptorCount(swapchainImageCount);
+		descriptorPoolSize.descriptorCount(windowRenderContext.swapchainImageCount);
 		
 		VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = VkDescriptorPoolCreateInfo.calloc(stack);
 		descriptorPoolCreateInfo.sType$Default();
 		descriptorPoolCreateInfo.pPoolSizes(descriptorPoolSize);
-		descriptorPoolCreateInfo.maxSets(swapchainImageCount);
+		descriptorPoolCreateInfo.maxSets(windowRenderContext.swapchainImageCount);
 		
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateDescriptorPool(gpu.device, descriptorPoolCreateInfo, null, buf);
+		vkCreateDescriptorPool(CommonRenderContext.instance().gpu.device, descriptorPoolCreateInfo, null, buf);
 		
 		descriptorPool = buf.get(0);
 	}
@@ -209,43 +212,15 @@ public class Engine
 		
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateDescriptorSetLayout(gpu.device, descriptorSetLayoutCreateInfo, null, buf);
+		vkCreateDescriptorSetLayout(CommonRenderContext.instance().gpu.device, descriptorSetLayoutCreateInfo, null, buf);
 		
 		descriptorSetLayout = buf.get(0);
-	}
-
-	private void initSurface(MemoryStack stack)
-	{
-		surface = Utils.createWindowSurface(vkInstance.handle(), window.handle, stack);
-	}
-
-	private void initSwapchain(MemoryStack stack)
-	{
-		VkSurfaceCapabilitiesKHR surfaceCapabilities = Utils.getPhysicalDeviceSurfaceCapabilities(gpu.physicalDevice, surface, stack);
-
-		VkExtent2D actualExtent = Utils.getFramebufferSize(window.handle, stack);
-
-		framebufferExtent = VkExtent2D.calloc();
-
-		framebufferExtent.width(Math.clamp(actualExtent.width(), surfaceCapabilities.minImageExtent().width(), surfaceCapabilities.maxImageExtent().width()));
-		framebufferExtent.height(Math.clamp(actualExtent.height(), surfaceCapabilities.minImageExtent().height(), surfaceCapabilities.maxImageExtent().height()));
-
-		int imageCount = surfaceCapabilities.minImageCount() + 1;
-		if (surfaceCapabilities.maxImageCount() > 0)
-		{
-			imageCount = Math.clamp(imageCount, surfaceCapabilities.minImageCount(), surfaceCapabilities.maxImageCount());
-		}
-		
-		swapchainImageCount = imageCount;
-		
-		swapchain = new Swapchain();
-		swapchain.create(surfaceCapabilities, actualExtent.width(), actualExtent.height(), gpu.device, surface, gpu.queueFamilies, renderPass, swapchainImageCount);
 	}
 	
 	private void createRenderPass(MemoryStack stack)
 	{
 		VkAttachmentDescription.Buffer colorAttachment = VkAttachmentDescription.calloc(1, stack);
-		colorAttachment.format(swapchainFormat);
+		colorAttachment.format(windowRenderContext.swapchainFormat);
 		colorAttachment.samples(VK_SAMPLE_COUNT_1_BIT);
 		colorAttachment.loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR);
 		colorAttachment.storeOp(VK_ATTACHMENT_STORE_OP_STORE);
@@ -277,29 +252,24 @@ public class Engine
 		renderPassCreateInfo.pSubpasses(subpass);
 		renderPassCreateInfo.pDependencies(subpassDependency);
 
-		renderPass = Utils.createRenderPass(gpu.device, renderPassCreateInfo, stack);
+		renderPass = Utils.createRenderPass(CommonRenderContext.instance().gpu.device, renderPassCreateInfo, stack);
 	}
 	
 	private void initUniformBuffers(MemoryStack stack)
 	{
-		uniformBuffers = new long[swapchainImageCount];
-		uniformBuffersMemory = new long[swapchainImageCount];
-		uniformBuffersMappedMemory = new long[swapchainImageCount];
+		uniformBuffers = new VulkanBuffer[windowRenderContext.swapchainImageCount];
 		
-		for (int i = 0; i < swapchainImageCount; i++)
+		for (int i = 0; i < windowRenderContext.swapchainImageCount; i++)
 		{
-			ByRef<Long> byrefBuffer = new ByRef<>();
-			ByRef<Long> byrefBufferMemory = new ByRef<>();
+			VulkanBuffer buffer = new VulkanBuffer.Builder()
+					.size(UBO.byteSize())
+					.usage(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
+					.properties(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+					.create();
 			
-			createBuffer(UBO.byteSize(), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, byrefBuffer, byrefBufferMemory, stack);
-			
-			long buffer = byrefBuffer.value;
-			long bufferMemory = byrefBufferMemory.value;
-			long mappedMemoryAddress = Utils.mapMemory(gpu.device, bufferMemory, 0, UBO.byteSize(), 0, stack);
-			
+			buffer.map();
+
 			uniformBuffers[i] = buffer;
-			uniformBuffersMemory[i] = bufferMemory;
-			uniformBuffersMappedMemory[i] = mappedMemoryAddress;
 		}
 	}
 	
@@ -308,29 +278,29 @@ public class Engine
 		VkCommandPoolCreateInfo commandPoolCreateInfo = VkCommandPoolCreateInfo.calloc(stack);
 		commandPoolCreateInfo.sType$Default();
 		commandPoolCreateInfo.flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-		commandPoolCreateInfo.queueFamilyIndex(gpu.queueFamilies.graphicsFamily);
+		commandPoolCreateInfo.queueFamilyIndex(CommonRenderContext.instance().gpu.queueFamilies.graphicsFamily);
 
-		commandPool = Utils.createCommandPool(gpu.device, commandPoolCreateInfo, stack);
+		CommonRenderContext.instance().commandPool = Utils.createCommandPool(CommonRenderContext.instance().gpu.device, commandPoolCreateInfo, stack);
 
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo = VkCommandBufferAllocateInfo.calloc(stack);
 		commandBufferAllocateInfo.sType$Default();
-		commandBufferAllocateInfo.commandPool(commandPool);
+		commandBufferAllocateInfo.commandPool(CommonRenderContext.instance().commandPool);
 		commandBufferAllocateInfo.level(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 		commandBufferAllocateInfo.commandBufferCount(1);
 
-		commandBuffer = Utils.allocateCommandBuffer(gpu.device, commandBufferAllocateInfo, stack);
+		commandBuffer = Utils.allocateCommandBuffer(CommonRenderContext.instance().gpu.device, commandBufferAllocateInfo, stack);
 
 	}
 
 	public void run()
 	{
-		while (!window.shouldClose())
+		while (!windowRenderContext.window.shouldClose())
 		{
 			update();
 			render();
 		}
 
-		vkDeviceWaitIdle(gpu.device);
+		vkDeviceWaitIdle(CommonRenderContext.instance().gpu.device);
 	}
 
 	public void update()
@@ -342,11 +312,10 @@ public class Engine
 	{
 		try (MemoryStack stack = MemoryStack.stackPush())
 		{
-			vkWaitForFences(gpu.device, inFlightFence, true, Long.MAX_VALUE);
+			inFlightFence.waitFor();
+			inFlightFence.reset();
 
-			vkResetFences(gpu.device, inFlightFence);
-
-			int imageIndex = Utils.acquireNextImage(gpu.device, swapchain.swapchain, imageAvailableSemaphore, stack);
+			int imageIndex = windowRenderContext.swapchain.acquireNextImage(imageAvailableSemaphore);
 
 			vkResetCommandBuffer(commandBuffer, 0);
 
@@ -356,22 +325,22 @@ public class Engine
 
 			VkSubmitInfo submitInfo = VkSubmitInfo.calloc(stack);
 			submitInfo.sType$Default();
-			submitInfo.pWaitSemaphores(stack.longs(imageAvailableSemaphore));
+			submitInfo.pWaitSemaphores(stack.longs(imageAvailableSemaphore.handle()));
 			submitInfo.waitSemaphoreCount(1);
 			submitInfo.pWaitDstStageMask(stack.ints(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT));
 			submitInfo.pCommandBuffers(stack.pointers(commandBuffer));
-			submitInfo.pSignalSemaphores(stack.longs(renderFinishedSemaphore));
+			submitInfo.pSignalSemaphores(stack.longs(renderFinishedSemaphore.handle()));
 
-			vkQueueSubmit(gpu.graphicsQueue, submitInfo, inFlightFence);
+			vkQueueSubmit(CommonRenderContext.instance().gpu.graphicsQueue, submitInfo, inFlightFence.handle());
 
 			VkPresentInfoKHR presentInfo = VkPresentInfoKHR.calloc(stack);
 			presentInfo.sType$Default();
-			presentInfo.pWaitSemaphores(stack.longs(renderFinishedSemaphore));
+			presentInfo.pWaitSemaphores(stack.longs(renderFinishedSemaphore.handle()));
 			presentInfo.swapchainCount(1);
-			presentInfo.pSwapchains(stack.longs(swapchain.swapchain));
+			presentInfo.pSwapchains(stack.longs(windowRenderContext.swapchain.swapchain));
 			presentInfo.pImageIndices(stack.ints(imageIndex));
 
-			vkQueuePresentKHR(gpu.presentQueue, presentInfo);
+			vkQueuePresentKHR(CommonRenderContext.instance().gpu.presentQueue, presentInfo);
 		}
 	}
 
@@ -382,15 +351,15 @@ public class Engine
 		float passedSeconds = (float)(diff / 1000000000.0);
 		
 		UBO ubo = new UBO();
-		ubo.projection = new Matrix4f().perspective(MathUtils.DEG_TO_RADf * 45.0f, framebufferExtent.width() / framebufferExtent.height(), 0.1f, 10.0f);
+		ubo.projection = new Matrix4f().perspective(MathUtils.DEG_TO_RADf * 45.0f, windowRenderContext.framebufferExtent.width() / windowRenderContext.framebufferExtent.height(), 0.1f, 10.0f);
 		ubo.view = new Matrix4f().lookAt(2.0f, 2.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
 		ubo.model = new Matrix4f().rotate(MathUtils.DEG_TO_RADf * 90.0f * passedSeconds, 0.0f, 0.0f, 1.0f);
 		
 		ubo.projection.m11(ubo.projection.m11() * -1);
 		
-		long currentBufferMappedMemory = uniformBuffersMappedMemory[imageIndex];
+		VulkanBuffer currentBuffer = uniformBuffers[imageIndex];
 		
-		FloatBuffer buf = MemoryUtil.memFloatBuffer(currentBufferMappedMemory, UBO.floatSize());
+		FloatBuffer buf = MemoryUtil.memFloatBuffer(currentBuffer.mappedMemoryHandle(), UBO.floatSize());
 		
 		ubo.model.get(buf);
 		buf.position(16);
@@ -412,7 +381,7 @@ public class Engine
 
 			VkRect2D renderArea = VkRect2D.calloc(stack);
 			renderArea.offset(offset);
-			renderArea.extent(framebufferExtent);
+			renderArea.extent(windowRenderContext.framebufferExtent);
 
 			VkClearColorValue clearColorValue = VkClearColorValue.calloc(stack);
 			clearColorValue.float32(0, 0.0f);
@@ -426,7 +395,7 @@ public class Engine
 			VkRenderPassBeginInfo renderPassBeginInfo = VkRenderPassBeginInfo.calloc(stack);
 			renderPassBeginInfo.sType$Default();
 			renderPassBeginInfo.renderPass(renderPass);
-			renderPassBeginInfo.framebuffer(swapchain.swapchainFramebuffers[imageIndex]);
+			renderPassBeginInfo.framebuffer(windowRenderContext.swapchain.swapchainFramebuffers[imageIndex]);
 			renderPassBeginInfo.renderArea(renderArea);
 			renderPassBeginInfo.clearValueCount(1);
 			renderPassBeginInfo.pClearValues(clearColor);
@@ -438,8 +407,8 @@ public class Engine
 			VkViewport.Buffer viewport = VkViewport.calloc(1, stack);
 			viewport.x(0.0f);
 			viewport.y(0.0f);
-			viewport.width(framebufferExtent.width());
-			viewport.height(framebufferExtent.height());
+			viewport.width(windowRenderContext.framebufferExtent.width());
+			viewport.height(windowRenderContext.framebufferExtent.height());
 			viewport.minDepth(0.0f);
 			viewport.maxDepth(1.0f);
 
@@ -451,16 +420,16 @@ public class Engine
 
 			VkRect2D.Buffer scissor = VkRect2D.calloc(1, stack);
 			scissor.offset(scissorOffset);
-			scissor.extent(framebufferExtent);
+			scissor.extent(windowRenderContext.framebufferExtent);
 
 			vkCmdSetScissor(commandBuffer, 0, scissor);
 
-			LongBuffer vertexBuffers = stack.longs(model.vertexBuffer.buffer);
+			LongBuffer vertexBuffers = stack.longs(model.vertexBuffer.handle());
 			LongBuffer offsets = stack.longs(0);
 			
 			vkCmdBindVertexBuffers(commandBuffer, 0, vertexBuffers, offsets);
 			
-			vkCmdBindIndexBuffer(commandBuffer, model.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdBindIndexBuffer(commandBuffer, model.indexBuffer.handle(), 0, VK_INDEX_TYPE_UINT32);
 			
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline.pipelineLayout, 0, stack.longs(descriptorSets[imageIndex]), null);
 			
@@ -474,141 +443,52 @@ public class Engine
 
 	public void createSyncObjects(MemoryStack stack)
 	{
-		VkSemaphoreCreateInfo semaphoreCreateInfo = VkSemaphoreCreateInfo.calloc(stack);
-		semaphoreCreateInfo.sType$Default();
+		imageAvailableSemaphore = new Semaphore.Builder().create();
+		
+		renderFinishedSemaphore = new Semaphore.Builder().create();
 
-		imageAvailableSemaphore = Utils.createSemaphore(gpu.device, semaphoreCreateInfo, stack);
-		renderFinishedSemaphore = Utils.createSemaphore(gpu.device, semaphoreCreateInfo, stack);
-
-		VkFenceCreateInfo fenceCreateInfo = VkFenceCreateInfo.calloc(stack);
-		fenceCreateInfo.sType$Default();
-		fenceCreateInfo.flags(VK_FENCE_CREATE_SIGNALED_BIT);
-
-		inFlightFence = Utils.createFence(gpu.device, fenceCreateInfo, stack);
+		inFlightFence = new Fence.Builder()
+			.signaled()
+			.create();
 	}
 
 	public void __release()
 	{
-		model.__release(gpu);
+		model.__release();
 
-		vkDestroySemaphore(gpu.device, imageAvailableSemaphore, null);
-		vkDestroySemaphore(gpu.device, renderFinishedSemaphore, null);
+		imageAvailableSemaphore.__release();
+		renderFinishedSemaphore.__release();
 
-		vkDestroyFence(gpu.device, inFlightFence, null);
+		inFlightFence.__release();
 
-		vkDestroyCommandPool(gpu.device, commandPool, null);
+		vkDestroyCommandPool(CommonRenderContext.instance().gpu.device, CommonRenderContext.instance().commandPool, null);
 
-		vkDestroyRenderPass(gpu.device, renderPass, null);
+		vkDestroyRenderPass(CommonRenderContext.instance().gpu.device, renderPass, null);
 		
-		graphicsPipeline.__release(gpu);
+		graphicsPipeline.__release();
 
 		for (int i = 0; i < uniformBuffers.length; i++)
 		{
-			vkDestroyBuffer(gpu.device, uniformBuffers[i], null);
-			vkFreeMemory(gpu.device, uniformBuffersMemory[i], null);
+			uniformBuffers[i].__release();
 		}
 
-		swapchain.__release(gpu.device);
+		windowRenderContext.swapchain.__release();
 		
-		vkDestroyDescriptorPool(gpu.device, descriptorPool, null);
+		vkDestroyDescriptorPool(CommonRenderContext.instance().gpu.device, descriptorPool, null);
 		
-		vkDestroyDescriptorSetLayout(gpu.device, descriptorSetLayout, null);
+		vkDestroyDescriptorSetLayout(CommonRenderContext.instance().gpu.device, descriptorSetLayout, null);
 
-		framebufferExtent.free();
+		windowRenderContext.framebufferExtent.free();
 
-		vkDestroySurfaceKHR(vkInstance.handle(), surface, null);
+		vkDestroySurfaceKHR(CommonRenderContext.instance().vkInstance.handle(), windowRenderContext.surface, null);
 
-		gpu.__release();
+		CommonRenderContext.instance().gpu.__release();
 
-		vkInstance.__release();
+		CommonRenderContext.instance().vkInstance.__release();
 		
-		window.__release();
+		windowRenderContext.window.__release();
 
 		GLFWContext.__release();
-	}
-	
-	public void copyBuffer(long srcBuffer, long dstBuffer, int size, MemoryStack stack)
-	{
-		VkCommandBufferAllocateInfo commandBufferAllocateInfo = VkCommandBufferAllocateInfo.calloc(stack);
-		commandBufferAllocateInfo.sType$Default();
-		commandBufferAllocateInfo.level(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-		commandBufferAllocateInfo.commandPool(commandPool);
-		commandBufferAllocateInfo.commandBufferCount(1);
-		
-		VkCommandBuffer cmdBuffer = Utils.allocateCommandBuffer(gpu.device, commandBufferAllocateInfo, stack);
-		
-		VkCommandBufferBeginInfo commandBufferBeginInfo = VkCommandBufferBeginInfo.calloc(stack);
-		commandBufferBeginInfo.sType$Default();
-		commandBufferBeginInfo.flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-		
-		vkBeginCommandBuffer(cmdBuffer, commandBufferBeginInfo);
-		
-		VkBufferCopy.Buffer bufferCopy = VkBufferCopy.calloc(1, stack);
-		bufferCopy.srcOffset(0);
-		bufferCopy.dstOffset(0);
-		bufferCopy.size(size);
-		
-		vkCmdCopyBuffer(cmdBuffer, srcBuffer, dstBuffer, bufferCopy);
-		
-		vkEndCommandBuffer(cmdBuffer);
-		
-		VkSubmitInfo submitInfo = VkSubmitInfo.calloc(stack);
-		submitInfo.sType$Default();
-		submitInfo.pCommandBuffers(stack.pointers(cmdBuffer));
-		
-		vkQueueSubmit(gpu.graphicsQueue, submitInfo, VK_NULL_HANDLE);
-		
-		vkQueueWaitIdle(gpu.graphicsQueue);
-		
-		vkFreeCommandBuffers(gpu.device, commandPool, stack.pointers(cmdBuffer));
-	}
-	
-	public void createBuffer(long size, int usage, int properties, ByRef<Long> buffer, ByRef<Long> bufferMemory, MemoryStack stack)
-	{
-		VkBufferCreateInfo bufferCreateInfo = VkBufferCreateInfo.calloc(stack);
-		bufferCreateInfo.sType$Default();
-		bufferCreateInfo.size(size);
-		bufferCreateInfo.usage(usage);
-		bufferCreateInfo.sharingMode(VK_SHARING_MODE_EXCLUSIVE);
-		
-		long newBuffer = Utils.createBuffer(gpu.device, bufferCreateInfo, stack);
-		
-		VkMemoryRequirements memoryRequirements = VkMemoryRequirements.calloc(stack);
-		
-		vkGetBufferMemoryRequirements(gpu.device, newBuffer, memoryRequirements);
-		
-		VkMemoryAllocateInfo memoryAllocateInfo = VkMemoryAllocateInfo.calloc(stack);
-		memoryAllocateInfo.sType$Default();
-		memoryAllocateInfo.allocationSize(memoryRequirements.size());
-		memoryAllocateInfo.memoryTypeIndex(findMemoryType(memoryRequirements.memoryTypeBits(), properties, stack));
-		
-		LongBuffer memoryBuffer = stack.mallocLong(1);
-		
-		vkAllocateMemory(gpu.device, memoryAllocateInfo, null, memoryBuffer);
-		
-		long newBufferMemory = memoryBuffer.get(0);
-		
-		vkBindBufferMemory(gpu.device, newBuffer, newBufferMemory, 0);
-		
-		buffer.value = newBuffer;
-		bufferMemory.value = newBufferMemory;
-	}
-	
-	public int findMemoryType(int typeFilter, int properties, MemoryStack stack)
-	{
-		VkPhysicalDeviceMemoryProperties memoryProperties = VkPhysicalDeviceMemoryProperties.calloc(stack);
-		
-		vkGetPhysicalDeviceMemoryProperties(gpu.physicalDevice, memoryProperties);
-		
-		for(int i = 0; i < memoryProperties.memoryTypeCount(); i++)
-		{
-			if((typeFilter & (1 << i)) != 0 && (memoryProperties.memoryTypes(i).propertyFlags() & properties) == properties)
-			{
-				return i;
-			}
-		}
-		
-		throw new Error();
 	}
 	
 	public static class UBO
