@@ -1,4 +1,4 @@
-package org.drakum.demo;
+package org.drakum.demo.vkn;
 
 import static org.lwjgl.glfw.GLFW.*;
 

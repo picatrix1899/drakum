@@ -1,6 +1,6 @@
-package org.drakum.demo;
+package org.drakum.demo.vkn;
 
-public class QueueFamilyList
+public class VknQueueFamilyList
 {
 	public int graphicsFamily = -1;
 	public int presentFamily = -1;

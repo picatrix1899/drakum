@@ -1,4 +1,4 @@
-package org.drakum.demo;
+package org.drakum.demo.vkn;
 
 import static org.lwjgl.vulkan.VK14.*;
 
@@ -8,21 +8,22 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import org.drakum.demo.Engine;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkShaderModuleCreateInfo;
 
-public class ShaderModule
+public class VknShaderModule
 {
 	public long handle;
 	
-	public ShaderModule()
+	public VknShaderModule()
 	{
 		
 	}
 	
 	public void __release()
 	{
-		vkDestroyShaderModule(CommonRenderContext.instance().gpu.device, handle, null);
+		vkDestroyShaderModule(CommonRenderContext.gpu.handle(), handle, null);
 	}
 	
 	private static ByteBuffer readFile(String file, MemoryStack stack)
@@ -47,7 +48,7 @@ public class ShaderModule
 	
 	public static class Builder
 	{
-		public ShaderModule create(String path)
+		public VknShaderModule create(String path)
 		{
 			try(MemoryStack stack = MemoryStack.stackPush())
 			{
@@ -57,9 +58,9 @@ public class ShaderModule
 				vertexShaderModuleCreateInfo.sType$Default();
 				vertexShaderModuleCreateInfo.pCode(vertexShaderData);
 
-				long shaderModule = Utils.createShaderModule(CommonRenderContext.instance().gpu.device, vertexShaderModuleCreateInfo, stack);
+				long shaderModule = VknInternalUtils.createShaderModule(CommonRenderContext.gpu.handle(), vertexShaderModuleCreateInfo, stack);
 				
-				ShaderModule result = new ShaderModule();
+				VknShaderModule result = new VknShaderModule();
 				result.handle = shaderModule;
 				
 				return result;

@@ -1,14 +1,11 @@
-package org.drakum.demo;
+package org.drakum.demo.vkn;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.glfw.GLFWVulkan.*;
 import static org.lwjgl.vulkan.KHRSurface.*;
+import static org.lwjgl.vulkan.KHRGetSurfaceCapabilities2.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
-import static org.lwjgl.vulkan.VK10.VK_NULL_HANDLE;
-import static org.lwjgl.vulkan.VK10.vkAllocateMemory;
-import static org.lwjgl.vulkan.VK10.vkCreatePipelineLayout;
-import static org.lwjgl.vulkan.VK10.vkCreateShaderModule;
-import static org.lwjgl.vulkan.VK10.vkMapMemory;
+import static org.lwjgl.vulkan.VK10.vkGetImageMemoryRequirements;
 import static org.lwjgl.vulkan.VK14.*;
 
 import java.nio.IntBuffer;
@@ -26,22 +23,118 @@ import org.lwjgl.vulkan.VkExtent2D;
 import org.lwjgl.vulkan.VkFenceCreateInfo;
 import org.lwjgl.vulkan.VkFramebufferCreateInfo;
 import org.lwjgl.vulkan.VkGraphicsPipelineCreateInfo;
+import org.lwjgl.vulkan.VkImageCreateInfo;
 import org.lwjgl.vulkan.VkImageViewCreateInfo;
 import org.lwjgl.vulkan.VkInstance;
 import org.lwjgl.vulkan.VkInstanceCreateInfo;
 import org.lwjgl.vulkan.VkMemoryAllocateInfo;
+import org.lwjgl.vulkan.VkMemoryRequirements;
 import org.lwjgl.vulkan.VkPhysicalDevice;
+import org.lwjgl.vulkan.VkPhysicalDeviceFeatures2;
+import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties2;
+import org.lwjgl.vulkan.VkPhysicalDeviceProperties2;
+import org.lwjgl.vulkan.VkPhysicalDeviceSurfaceInfo2KHR;
 import org.lwjgl.vulkan.VkPipelineLayoutCreateInfo;
 import org.lwjgl.vulkan.VkQueue;
-import org.lwjgl.vulkan.VkQueueFamilyProperties;
+import org.lwjgl.vulkan.VkQueueFamilyProperties2;
 import org.lwjgl.vulkan.VkRenderPassCreateInfo;
 import org.lwjgl.vulkan.VkSemaphoreCreateInfo;
 import org.lwjgl.vulkan.VkShaderModuleCreateInfo;
-import org.lwjgl.vulkan.VkSurfaceCapabilitiesKHR;
+import org.lwjgl.vulkan.VkSurfaceCapabilities2KHR;
+import org.lwjgl.vulkan.VkSurfaceFormat2KHR;
 import org.lwjgl.vulkan.VkSwapchainCreateInfoKHR;
 
-public class Utils
+public class VknInternalUtils
 {
+	public static VkMemoryRequirements getImageMemoryRequirements(VkDevice device, long image, MemoryStack stack)
+	{
+		VkMemoryRequirements memReqs = VkMemoryRequirements.malloc(stack);
+		vkGetImageMemoryRequirements(CommonRenderContext.gpu.handle(), image, memReqs);
+		
+		return memReqs;
+	}
+	
+	public static long createImage(VkDevice device, VkImageCreateInfo createInfo, MemoryStack stack)
+	{
+		LongBuffer pImage = stack.mallocLong(1);
+		vkCreateImage(CommonRenderContext.gpu.handle(), createInfo, null, pImage);
+		return pImage.get(0);
+	}
+	
+	public static int waitForFence(VkDevice device, long fence, boolean waitAll, long timeout)
+	{
+		return vkWaitForFences(device, fence, waitAll, timeout);
+	}
+	
+	public static int waitForFences(VkDevice device, long[] fences, boolean waitAll, long timeout, MemoryStack stack)
+	{
+		LongBuffer buf = stack.longs(fences);
+		
+		return vkWaitForFences(device, buf, waitAll, timeout);
+	}
+	
+	public static VknSurfaceFormat[] getPhysicalDeviceSurfaceFormats(VkPhysicalDevice physicalDevice, long surface, MemoryStack stack)
+	{
+		VkPhysicalDeviceSurfaceInfo2KHR surfaceInfo = VkPhysicalDeviceSurfaceInfo2KHR.calloc(stack);
+		surfaceInfo.sType$Default();
+		surfaceInfo.surface(surface);
+		
+		IntBuffer countBuf = stack.mallocInt(1);
+		
+		vkGetPhysicalDeviceSurfaceFormats2KHR(physicalDevice, surfaceInfo, countBuf, null);
+		
+		int count = countBuf.get(0);
+		
+		VkSurfaceFormat2KHR.Buffer buf = VkSurfaceFormat2KHR.calloc(count, stack);
+	
+		for (int i = 0; i < count; i++) {
+			buf.get(i).sType$Default();
+		}
+		
+		vkGetPhysicalDeviceSurfaceFormats2KHR(physicalDevice, surfaceInfo, countBuf, buf);
+		
+		VknSurfaceFormat[] out = new VknSurfaceFormat[count];
+		
+		for(int i = 0; i < count; i++)
+		{
+			VkSurfaceFormat2KHR format = buf.get(i);
+			VknSurfaceFormat formats = new VknSurfaceFormat(format);
+			
+			out[i] = formats;
+		}
+			
+		return out;
+	}
+	
+	public static VknPhysicalGPUMemoryProperties getPhysicalDeviceMemoryProperties(VkPhysicalDevice physicalDevice, MemoryStack stack)
+	{
+		VkPhysicalDeviceMemoryProperties2 deviceFeatures = VkPhysicalDeviceMemoryProperties2.calloc(stack);
+		deviceFeatures.sType$Default();
+		
+		vkGetPhysicalDeviceMemoryProperties2(physicalDevice, deviceFeatures);
+		
+		return new VknPhysicalGPUMemoryProperties(deviceFeatures);
+	}
+	
+	public static VknPhysicalGPUFeatures getPhysicalDeviceFeatures(VkPhysicalDevice physicalDevice, MemoryStack stack)
+	{
+		VkPhysicalDeviceFeatures2 deviceFeatures = VkPhysicalDeviceFeatures2.calloc(stack);
+		deviceFeatures.sType$Default();
+		
+		vkGetPhysicalDeviceFeatures2(physicalDevice, deviceFeatures);
+		
+		return new VknPhysicalGPUFeatures(deviceFeatures);
+	}
+	
+	public static VknPhysicalGPUProperties getPhysicalDeviceProperties(VkPhysicalDevice physicalDevice, MemoryStack stack)
+	{
+		VkPhysicalDeviceProperties2 deviceProperties = VkPhysicalDeviceProperties2.calloc(stack);
+		deviceProperties.sType$Default();
+		
+		vkGetPhysicalDeviceProperties2(physicalDevice, deviceProperties);
+		
+		return new VknPhysicalGPUProperties(deviceProperties);
+	}
 	
 	public static VkInstance createInstance(VkInstanceCreateInfo createInfo, MemoryStack stack)
 	{
@@ -55,43 +148,53 @@ public class Utils
 		return new VkInstance(buf.get(0), createInfo);
 	}
 	
-	public static VkPhysicalDevice[] enumeratePhysicalDevices(VkInstance vkInstance, MemoryStack stack)
+	public static VknPhysicalGPU[] enumeratePhysicalDevices(VkInstance vkInstance, MemoryStack stack)
 	{
-		IntBuffer count = stack.mallocInt(1);
+		IntBuffer countBuf = stack.mallocInt(1);
 		
-		vkEnumeratePhysicalDevices(vkInstance, count, null);
+		vkEnumeratePhysicalDevices(vkInstance, countBuf, null);
 		
-		PointerBuffer buf = stack.mallocPointer(count.get(0));
+		int count = countBuf.get(0);
 		
-		vkEnumeratePhysicalDevices(vkInstance, count, buf);
+		PointerBuffer buf = stack.mallocPointer(count);
+		
+		vkEnumeratePhysicalDevices(vkInstance, countBuf, buf);
 
-		VkPhysicalDevice[] out = new VkPhysicalDevice[count.get(0)];
-		
-		for(int i = 0; i < count.get(0); i++)
+		VknPhysicalGPU[] out = new VknPhysicalGPU[count];
+		for(int i = 0; i < count; i++)
 		{
-			out[i] = new VkPhysicalDevice(buf.get(i), vkInstance);
+			out[i] = VknPhysicalGPU.create(new VkPhysicalDevice(buf.get(i), vkInstance));
 		}
 		
 		return out;
 	}
 	
-	public static VkQueueFamilyProperties[] getPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice physicalDevice, MemoryStack stack)
+	public static VknQueueFamilyProperties[] getPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice physicalDevice, MemoryStack stack)
 	{
-		IntBuffer count = stack.mallocInt(1);
+		IntBuffer countBuf = stack.mallocInt(1);
 		
-		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, count, null);
+		vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, countBuf, null);
 		
-		VkQueueFamilyProperties.Buffer buf = VkQueueFamilyProperties.calloc(count.get(0), stack);
+		int count = countBuf.get(0);
+		
+		VkQueueFamilyProperties2.Buffer buf = VkQueueFamilyProperties2.calloc(count, stack);
 	
-		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, count, buf);
-		
-		VkQueueFamilyProperties[] out = new VkQueueFamilyProperties[count.get(0)];
-		
-		for(int i = 0; i < count.get(0); i++)
-		{
-			out[i] = buf.get(i);
+		for (int i = 0; i < count; i++) {
+			buf.get(i).sType$Default();
 		}
 		
+		vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, countBuf, buf);
+		
+		VknQueueFamilyProperties[] out = new VknQueueFamilyProperties[count];
+		
+		for(int i = 0; i < count; i++)
+		{
+			VkQueueFamilyProperties2 prop = buf.get(i);
+			VknQueueFamilyProperties properties = new VknQueueFamilyProperties(i, prop);
+			
+			out[i] = properties;
+		}
+			
 		return out;
 	}
 	
@@ -146,13 +249,18 @@ public class Utils
 		return buf.get(0);
 	}
 	
-	public static VkSurfaceCapabilitiesKHR getPhysicalDeviceSurfaceCapabilities(VkPhysicalDevice physicalDevice, long surface, MemoryStack stack)
+	public static VknSurfaceCapabilities getPhysicalDeviceSurfaceCapabilities(VkPhysicalDevice physicalDevice, long surface, MemoryStack stack)
 	{
-		VkSurfaceCapabilitiesKHR surfaceCapabilities = VkSurfaceCapabilitiesKHR.calloc(stack);
+		VkPhysicalDeviceSurfaceInfo2KHR surfaceInfo = VkPhysicalDeviceSurfaceInfo2KHR.calloc(stack);
+		surfaceInfo.sType$Default();
+		surfaceInfo.surface(surface);
 		
-		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, surfaceCapabilities);
+		VkSurfaceCapabilities2KHR surfaceCapabilities = VkSurfaceCapabilities2KHR.calloc(stack);
+		surfaceCapabilities.sType$Default();
 		
-		return surfaceCapabilities;
+		vkGetPhysicalDeviceSurfaceCapabilities2KHR(physicalDevice, surfaceInfo, surfaceCapabilities);
+		
+		return new VknSurfaceCapabilities(surfaceCapabilities);
 	}
 	
 	public static VkExtent2D getFramebufferSize(long window, MemoryStack stack)
@@ -278,13 +386,24 @@ public class Utils
 		return buf.get(0);
 	}
 	
-	public static int acquireNextImage(VkDevice device, long swapchain, long semaphore, MemoryStack stack)
+	public static IntResult acquireNextImage(VkDevice device, long swapchain, long semaphore, MemoryStack stack)
 	{
 		IntBuffer buf = stack.callocInt(1);
 		
-		vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE, semaphore, VK_NULL_HANDLE, buf);
+		int code = vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE, semaphore, VK_NULL_HANDLE, buf);
 		
-		return buf.get(0);
+		IntResult result = new IntResult();
+		
+		result.result = buf.get(0);
+		result.code = code;
+		
+		return result;
+	}
+	
+	public static class IntResult
+	{
+		public int result;
+		public int code;
 	}
 	
 	public static long createBuffer(VkDevice device, VkBufferCreateInfo createInfo, MemoryStack stack)
