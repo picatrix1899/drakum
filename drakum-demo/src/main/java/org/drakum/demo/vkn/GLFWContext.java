@@ -6,7 +6,7 @@ import org.lwjgl.glfw.GLFWErrorCallback;
 
 public class GLFWContext
 {
-	public static void __init()
+	public static void init()
 	{
 		if (!glfwInit())
 		{
@@ -18,7 +18,7 @@ public class GLFWContext
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	}
 	
-	public static void __release()
+	public static void close()
 	{
 		glfwTerminate();
 	}

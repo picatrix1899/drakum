@@ -17,22 +17,16 @@ import it.unimi.dsi.fastutil.ints.IntList;
 
 public class VknRenderPass
 {
+	private final VknContext context;
+	
 	private long handle;
 	
-	public long handle()
-	{
-		return this.handle;
-	}
-	
-	public void __release()
-	{
-		vkDestroyRenderPass(CommonRenderContext.gpu.handle(), this.handle, null);
-	}
-	
-	public static VknRenderPass create(CreateSettings settings)
+	public VknRenderPass(Settings settings)
 	{
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
+			this.context = settings.context;
+			
 			VkAttachmentDescription.Buffer attachmentDescriptions = VkAttachmentDescription.calloc(settings.attachments.size(), stack);
 			for(int i = 0; i < settings.attachments.size(); i++)
 			{
@@ -119,42 +113,65 @@ public class VknRenderPass
 			renderPassCreateInfo.pSubpasses(subpassDescriptions);
 			renderPassCreateInfo.pDependencies(subpassDependencies);
 
-			long handle = VknInternalUtils.createRenderPass(CommonRenderContext.gpu.handle(), renderPassCreateInfo, stack);
-			
-			VknRenderPass result = new VknRenderPass();
-			result.handle = handle;
-			
-			return result;
+			this.handle = VknInternalUtils.createRenderPass(this.context.gpu.handle(), renderPassCreateInfo, stack);
 		}
 	}
 	
-	public static class CreateSettings
+	public long handle()
 	{
+		ensureValid();
+		
+		return this.handle;
+	}
+	
+	public boolean isValid()
+	{
+		return this.handle != VK_NULL_HANDLE;
+	}
+	
+	public void close()
+	{
+		if(this.handle == VK_NULL_HANDLE) return;
+		
+		vkDestroyRenderPass(this.context.gpu.handle(), this.handle, null);
+
+		this.handle = VK_NULL_HANDLE;
+	}
+	
+	private void ensureValid()
+	{
+		if(VknContext.OBJECT_VALIDATION && !isValid()) throw new RuntimeException("Image object already closed.");
+	}
+	
+	public static class Settings
+	{
+		private final VknContext context;
+		
 		public final List<Attachment> attachments = new ArrayList<>();
 		public final List<Subpass> subpasses = new ArrayList<>();
 		public final List<SubpassDependency> dependencies = new ArrayList<>();
+		
+		public Settings(VknContext context)
+		{
+			this.context = context;
+		}
+		
+		public VknContext context()
+		{
+			return this.context;
+		}
 	}
 	
 	public static class Attachment
 	{
 		public int format;
-		public int loadOp;
-		public int storeOp;
-		public int stencilLoadOp;
-		public int stencilStoreOp;
-		public int initialLayout;
+		public int loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		public int storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		public int stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		public int stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		public int initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		public int finalLayout;
-		public int msSamples;
-		
-		public Attachment()
-		{
-			this.msSamples = VK_SAMPLE_COUNT_1_BIT;
-			this.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-			this.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-			this.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-			this.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-			this.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		}
+		public int msSamples = VK_SAMPLE_COUNT_1_BIT;
 	}
 	
 	public static class Subpass
@@ -164,6 +181,39 @@ public class VknRenderPass
 		public SubpassAttachmentRef depthStencilAttachmentReference;
 		public final IntList preserveAttachmentReferences = new IntArrayList();
 		public final List<SubpassAttachmentRef> resolveAttachmentReferences = new ArrayList<>();
+		
+		public Subpass addColorAttachmentReference(int index, int layout)
+		{
+			SubpassAttachmentRef reference = new SubpassAttachmentRef();
+			reference.attachementIndex = index;
+			reference.layout = layout;
+			
+			this.colorAttachmentReferences.add(reference);
+			
+			return this;
+		}
+		
+		public Subpass addResolveAttachmentReference(int index, int layout)
+		{
+			SubpassAttachmentRef reference = new SubpassAttachmentRef();
+			reference.attachementIndex = index;
+			reference.layout = layout;
+			
+			this.resolveAttachmentReferences.add(reference);
+			
+			return this;
+		}
+		
+		public Subpass setDepthStencilAttachmentReference(int index, int layout)
+		{
+			SubpassAttachmentRef reference = new SubpassAttachmentRef();
+			reference.attachementIndex = index;
+			reference.layout = layout;
+			
+			this.depthStencilAttachmentReference = reference;
+			
+			return this;
+		}
 	}
 	
 	public static class SubpassAttachmentRef

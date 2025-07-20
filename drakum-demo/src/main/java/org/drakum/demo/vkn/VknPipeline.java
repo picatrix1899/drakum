@@ -2,13 +2,15 @@ package org.drakum.demo.vkn;
 
 import static org.lwjgl.vulkan.VK14.*;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkGraphicsPipelineCreateInfo;
 import org.lwjgl.vulkan.VkPipelineColorBlendAttachmentState;
 import org.lwjgl.vulkan.VkPipelineColorBlendStateCreateInfo;
 import org.lwjgl.vulkan.VkPipelineDynamicStateCreateInfo;
 import org.lwjgl.vulkan.VkPipelineInputAssemblyStateCreateInfo;
-import org.lwjgl.vulkan.VkPipelineLayoutCreateInfo;
 import org.lwjgl.vulkan.VkPipelineMultisampleStateCreateInfo;
 import org.lwjgl.vulkan.VkPipelineRasterizationStateCreateInfo;
 import org.lwjgl.vulkan.VkPipelineShaderStageCreateInfo;
@@ -21,36 +23,30 @@ import org.lwjgl.vulkan.VkViewport;
 
 public class VknPipeline
 {
-	public long pipelineLayout;
-	public VknShaderModule vertexShaderModule;
-	public VknShaderModule fragmentShaderModule;
-	public long graphicsPipeline;
+	private final VknContext context;
 	
-	public void __release()
-	{
-		vkDestroyPipeline(CommonRenderContext.gpu.handle(), graphicsPipeline, null);
-		vkDestroyPipelineLayout(CommonRenderContext.gpu.handle(), pipelineLayout, null);
-		
-		vertexShaderModule.__release();
-		fragmentShaderModule.__release();
-	}
+	private final long pipelineLayout;
 	
-	public static VknPipeline create(CreateSettings settings)
+	private long handle;
+	
+	public VknPipeline(Settings settings)
 	{
 		try (MemoryStack stack = MemoryStack.stackPush())
 		{
-			VknShaderModule vertexShaderModule = new VknShaderModule.Builder().create("/vert.spv");
-			VknShaderModule fragmentShaderModule = new VknShaderModule.Builder().create("/frag.spv");
-
-			VkPipelineShaderStageCreateInfo.Buffer shaderStages = VkPipelineShaderStageCreateInfo.calloc(2, stack);
-			shaderStages.get(1).sType$Default();
-			shaderStages.get(1).stage(VK_SHADER_STAGE_VERTEX_BIT);
-			shaderStages.get(1).module(vertexShaderModule.handle);
-			shaderStages.get(1).pName(stack.UTF8("main"));
-			shaderStages.get(0).sType$Default();
-			shaderStages.get(0).stage(VK_SHADER_STAGE_FRAGMENT_BIT);
-			shaderStages.get(0).module(fragmentShaderModule.handle);
-			shaderStages.get(0).pName(stack.UTF8("main"));
+			this.context = settings.context;
+			
+			this.pipelineLayout = settings.pipelineLayout;
+			
+			VkPipelineShaderStageCreateInfo.Buffer shaderStages = VkPipelineShaderStageCreateInfo.calloc(settings.shaders.size(), stack);
+			for(int i = 0; i < settings.shaders.size(); i++)
+			{
+				ShaderSettings ss = settings.shaders.get(i);
+				
+				shaderStages.get(i).sType$Default();
+				shaderStages.get(i).stage(ss.stage);
+				shaderStages.get(i).module(ss.shaderModule.handle);
+				shaderStages.get(i).pName(stack.UTF8(ss.entryPoint));
+			}
 
 			VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo = VkPipelineDynamicStateCreateInfo.calloc(stack);
 			dynamicStateCreateInfo.sType$Default();
@@ -66,24 +62,12 @@ public class VknPipeline
 			pipelineInputAssemblyStateCreateInfo.topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 			pipelineInputAssemblyStateCreateInfo.primitiveRestartEnable(false);
 
-			VkViewport.Buffer viewport = VkViewport.calloc(1, stack);
-			viewport.x(0.0f);
-			viewport.y(0.0f);
-			viewport.width(settings.framebufferExtent.width);
-			viewport.height(settings.framebufferExtent.height);
-			viewport.minDepth(0.0f);
-			viewport.maxDepth(1.0f);
-
-			VkRect2D.Buffer scissor = VkRect2D.calloc(1, stack);
-			scissor.offset().x(0).y(0);
-			scissor.extent().width(settings.framebufferExtent.width).height(settings.framebufferExtent.height);
-
 			VkPipelineViewportStateCreateInfo pipelineViewportStateCreateInfo = VkPipelineViewportStateCreateInfo.calloc(stack);
 			pipelineViewportStateCreateInfo.sType$Default();
 			pipelineViewportStateCreateInfo.viewportCount(1);
 			pipelineViewportStateCreateInfo.scissorCount(1);
-			pipelineViewportStateCreateInfo.pViewports(viewport);
-			pipelineViewportStateCreateInfo.pScissors(scissor);
+			pipelineViewportStateCreateInfo.pViewports(VkViewport.calloc(1, stack));
+			pipelineViewportStateCreateInfo.pScissors(VkRect2D.calloc(1, stack));
 
 			VkPipelineRasterizationStateCreateInfo pipelineRasterizationStateCreateInfo = VkPipelineRasterizationStateCreateInfo.calloc(stack);
 			pipelineRasterizationStateCreateInfo.sType$Default();
@@ -97,7 +81,7 @@ public class VknPipeline
 			pipelineRasterizationStateCreateInfo.depthBiasConstantFactor(0.0f);
 			pipelineRasterizationStateCreateInfo.depthBiasClamp(0.0f);
 			pipelineRasterizationStateCreateInfo.depthBiasSlopeFactor(0.0f);
-
+			
 			VkPipelineMultisampleStateCreateInfo pipelineMultisampleStateCreateInfo = VkPipelineMultisampleStateCreateInfo.calloc(stack);
 			pipelineMultisampleStateCreateInfo.sType$Default();
 			pipelineMultisampleStateCreateInfo.sampleShadingEnable(false);
@@ -108,26 +92,19 @@ public class VknPipeline
 
 			VkPipelineColorBlendAttachmentState.Buffer pipelineColoreBlendAttachmentState = VkPipelineColorBlendAttachmentState.calloc(1, stack);
 			pipelineColoreBlendAttachmentState.colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT);
-			pipelineColoreBlendAttachmentState.blendEnable(true);
-			pipelineColoreBlendAttachmentState.srcColorBlendFactor(VK_BLEND_FACTOR_ONE);
-			pipelineColoreBlendAttachmentState.dstColorBlendFactor(VK_BLEND_FACTOR_ZERO);
-			pipelineColoreBlendAttachmentState.colorBlendOp(VK_BLEND_OP_ADD);
-			pipelineColoreBlendAttachmentState.srcAlphaBlendFactor(VK_BLEND_FACTOR_ONE);
-			pipelineColoreBlendAttachmentState.dstAlphaBlendFactor(VK_BLEND_FACTOR_ZERO);
-			pipelineColoreBlendAttachmentState.alphaBlendOp(VK_BLEND_OP_ADD);
-
+			pipelineColoreBlendAttachmentState.blendEnable(false);
+//			pipelineColoreBlendAttachmentState.srcColorBlendFactor(VK_BLEND_FACTOR_ONE);
+//			pipelineColoreBlendAttachmentState.dstColorBlendFactor(VK_BLEND_FACTOR_ZERO);
+//			pipelineColoreBlendAttachmentState.colorBlendOp(VK_BLEND_OP_ADD);
+//			pipelineColoreBlendAttachmentState.srcAlphaBlendFactor(VK_BLEND_FACTOR_ONE);
+//			pipelineColoreBlendAttachmentState.dstAlphaBlendFactor(VK_BLEND_FACTOR_ZERO);
+//			pipelineColoreBlendAttachmentState.alphaBlendOp(VK_BLEND_OP_ADD);
+			
 			VkPipelineColorBlendStateCreateInfo pipelineColorBlendStateCreateInfo = VkPipelineColorBlendStateCreateInfo.calloc(stack);
 			pipelineColorBlendStateCreateInfo.sType$Default();
 			pipelineColorBlendStateCreateInfo.logicOpEnable(false);
 			pipelineColorBlendStateCreateInfo.attachmentCount(1);
 			pipelineColorBlendStateCreateInfo.pAttachments(pipelineColoreBlendAttachmentState);
-
-			VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = VkPipelineLayoutCreateInfo.calloc(stack);
-			pipelineLayoutCreateInfo.sType$Default();
-			pipelineLayoutCreateInfo.pSetLayouts(stack.longs(settings.descriptorSetLayout));
-			pipelineLayoutCreateInfo.setLayoutCount(1);
-			
-			long pipelineLayout = VknInternalUtils.createPipelineLayout(CommonRenderContext.gpu.handle(), pipelineLayoutCreateInfo, stack);
 
 			VkGraphicsPipelineCreateInfo.Buffer graphicsPipelineCreateInfo = VkGraphicsPipelineCreateInfo.calloc(1, stack);
 			graphicsPipelineCreateInfo.sType$Default();
@@ -140,28 +117,101 @@ public class VknPipeline
 			graphicsPipelineCreateInfo.pMultisampleState(pipelineMultisampleStateCreateInfo);
 			graphicsPipelineCreateInfo.pColorBlendState(pipelineColorBlendStateCreateInfo);
 			graphicsPipelineCreateInfo.pDynamicState(dynamicStateCreateInfo);
-			graphicsPipelineCreateInfo.layout(pipelineLayout);
+			graphicsPipelineCreateInfo.layout(settings.pipelineLayout);
 			graphicsPipelineCreateInfo.renderPass(settings.renderPass);
 			graphicsPipelineCreateInfo.subpass(0);
-
-			long graphicsPipeline = VknInternalUtils.createGraphicsPipeline(CommonRenderContext.gpu.handle(), graphicsPipelineCreateInfo, stack);
 			
-			VknPipeline result = new VknPipeline();
-			result.vertexShaderModule = vertexShaderModule;
-			result.fragmentShaderModule =fragmentShaderModule;
-			result.pipelineLayout = pipelineLayout;
-			result.graphicsPipeline = graphicsPipeline;
-			
-			return result;
+			this.handle = VknInternalUtils.createGraphicsPipeline(this.context.gpu.handle(), graphicsPipelineCreateInfo, stack);
 		}
 	}
 	
-	public static class CreateSettings
+	public long handle()
 	{
-		public VknExtent2D framebufferExtent;
-		public long descriptorSetLayout;
+		ensureValid();
+		
+		return this.handle;
+	}
+
+	public long layoutHandle()
+	{
+		ensureValid();
+		
+		return this.pipelineLayout;
+	}
+	
+	public boolean isValid()
+	{
+		return this.handle != VK_NULL_HANDLE;
+	}
+	
+	public void close()
+	{
+		if(this.handle == VK_NULL_HANDLE) return;
+		
+		vkDestroyPipeline(this.context.gpu.handle(), handle, null);
+		
+		
+		this.handle = VK_NULL_HANDLE;
+	}
+	
+	private void ensureValid()
+	{
+		if(VknContext.OBJECT_VALIDATION && !isValid()) throw new RuntimeException("Fence object already closed.");
+	}
+	
+	public static class Settings
+	{
+		private final VknContext context;
+		
+		public long[] descriptorSetLayouts;
 		public long renderPass;
 		public VkVertexInputBindingDescription.Buffer bindingDescriptions;
 		public VkVertexInputAttributeDescription.Buffer attributeDescriptions;
+		public List<ShaderSettings> shaders = new ArrayList<>();
+		public long pipelineLayout;
+		
+		public Settings(VknContext context)
+		{
+			this.context = context;
+		}
+		
+		public VknContext context()
+		{
+			return this.context;
+		}
+		
+		public Settings addShader(int stage, VknShaderModule shaderModule)
+		{
+			this.shaders.add(new ShaderSettings(stage, shaderModule));
+			
+			return this;
+		}
+		
+		public Settings addShader(int stage, VknShaderModule shaderModule, String entryPoint)
+		{
+			this.shaders.add(new ShaderSettings(stage, shaderModule, entryPoint));
+			
+			return this;
+		}
+	}
+	
+	public static class ShaderSettings
+	{
+		public VknShaderModule shaderModule;
+		public int stage;
+		public String entryPoint = "main";
+		
+		public ShaderSettings(int stage, VknShaderModule shaderModule)
+		{
+			this.stage = stage;
+			this.shaderModule = shaderModule;
+		}
+		
+		public ShaderSettings(int stage, VknShaderModule shaderModule, String entryPoint)
+		{
+			this.stage = stage;
+			this.shaderModule = shaderModule;
+			this.entryPoint = entryPoint;
+		}
 	}
 }

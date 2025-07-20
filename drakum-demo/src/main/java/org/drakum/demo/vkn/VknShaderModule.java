@@ -14,16 +14,29 @@ import org.lwjgl.vulkan.VkShaderModuleCreateInfo;
 
 public class VknShaderModule
 {
+	private final VknContext context;
+	
 	public long handle;
 	
-	public VknShaderModule()
+	public VknShaderModule(VknContext context, String path)
 	{
-		
+		try(MemoryStack stack = MemoryStack.stackPush())
+		{
+			this.context = context;
+			
+			ByteBuffer vertexShaderData = readFile(path, stack);
+			
+			VkShaderModuleCreateInfo vertexShaderModuleCreateInfo = VkShaderModuleCreateInfo.calloc(stack);
+			vertexShaderModuleCreateInfo.sType$Default();
+			vertexShaderModuleCreateInfo.pCode(vertexShaderData);
+
+			this.handle = VknInternalUtils.createShaderModule(this.context.gpu.handle(), vertexShaderModuleCreateInfo, stack);
+		}
 	}
 	
-	public void __release()
+	public void close()
 	{
-		vkDestroyShaderModule(CommonRenderContext.gpu.handle(), handle, null);
+		vkDestroyShaderModule(this.context.gpu.handle(), handle, null);
 	}
 	
 	private static ByteBuffer readFile(String file, MemoryStack stack)
@@ -45,28 +58,5 @@ public class VknShaderModule
 
 		return null;
 	}
-	
-	public static class Builder
-	{
-		public VknShaderModule create(String path)
-		{
-			try(MemoryStack stack = MemoryStack.stackPush())
-			{
-				ByteBuffer vertexShaderData = readFile(path, stack);
-				
-				VkShaderModuleCreateInfo vertexShaderModuleCreateInfo = VkShaderModuleCreateInfo.calloc(stack);
-				vertexShaderModuleCreateInfo.sType$Default();
-				vertexShaderModuleCreateInfo.pCode(vertexShaderData);
-
-				long shaderModule = VknInternalUtils.createShaderModule(CommonRenderContext.gpu.handle(), vertexShaderModuleCreateInfo, stack);
-				
-				VknShaderModule result = new VknShaderModule();
-				result.handle = shaderModule;
-				
-				return result;
-			}
-		}
-	}
-	
 	
 }

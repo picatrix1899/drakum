@@ -2,81 +2,163 @@ package org.drakum.demo.vkn;
 
 import static org.lwjgl.vulkan.VK14.*;
 
-import java.lang.ref.Cleaner.Cleanable;
-
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkMemoryAllocateInfo;
 
 public class VknMemory
 {
-	private long handle;
+	private final VknContext context;
+	
+	private long handle = VK_NULL_HANDLE;
 	private long mappedHandle = VK_NULL_HANDLE;
+	
 	private final long size;
-	private final Cleanable cleanable;
 	
 	public VknMemory(Settings settings)
 	{
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
-			VkMemoryAllocateInfo memoryAllocateInfo = VkMemoryAllocateInfo.calloc(stack);
-			memoryAllocateInfo.sType$Default();
-			memoryAllocateInfo.allocationSize(settings.size);
-			memoryAllocateInfo.memoryTypeIndex(CommonRenderContext.gpu.findMemoryType(settings.memoryTypeBits, settings.properties, stack));
-
-			this.handle = VknInternalUtils.allocateMemory(CommonRenderContext.gpu.handle(), memoryAllocateInfo, stack);
+			this.context = settings.context;
 			this.size = settings.size;
 			
-			this.cleanable = VknCleanerUtils.CLEANER.register(this, () -> {
-				if(this.mappedHandle != VK_NULL_HANDLE) unmap();
-				vkFreeMemory(CommonRenderContext.gpu.handle(), handle, null);
-				
-				this.handle = VK_NULL_HANDLE;
-			});
+			VkMemoryAllocateInfo memoryAllocateInfo = VkMemoryAllocateInfo.calloc(stack);
+			memoryAllocateInfo.sType$Default();
+			memoryAllocateInfo.allocationSize(this.size);
+			memoryAllocateInfo.memoryTypeIndex(this.context.gpu.findMemoryType(settings.memoryTypeBits, settings.properties, stack));
+
+			this.handle = VknInternalUtils.allocateMemory(this.context.gpu.handle(), memoryAllocateInfo, stack);
 		}
 	}
 	
 	public long handle()
 	{
+		ensureValid();
+		
 		return this.handle;
 	}
 	
 	public long mappedHandle()
 	{
+		ensureValid();
+		
 		return this.mappedHandle;
 	}
 	
 	public boolean isMapped()
 	{
+		ensureValid();
+		
 		return this.mappedHandle != VK_NULL_HANDLE;
 	}
 	
 	public void map()
 	{
-		if(this.isMapped()) return;
+		ensureValid();
+		
+		if(this.mappedHandle != VK_NULL_HANDLE) return;
 		
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
-			this.mappedHandle = VknInternalUtils.mapMemory(CommonRenderContext.gpu.handle(), this.handle, 0, size, 0, stack);
+			this.mappedHandle = VknInternalUtils.mapMemory(this.context.gpu.handle(), this.handle, 0, size, 0, stack);
 		}
 	}
 	
 	public void unmap()
 	{
-		if(!this.isMapped()) return;
+		ensureValid();
 		
-		if(this.mappedHandle != VK_NULL_HANDLE) vkUnmapMemory(CommonRenderContext.gpu.handle(), this.handle);
+		if(this.mappedHandle == VK_NULL_HANDLE) return;
+		
+		vkUnmapMemory(this.context.gpu.handle(), this.handle);
+		
 		this.mappedHandle = VK_NULL_HANDLE;
+	}
+	
+	public boolean isValid()
+	{
+		return this.handle != VK_NULL_HANDLE;
 	}
 	
 	public void close()
 	{
-		this.cleanable.clean();
+		unmap();
+		
+		vkFreeMemory(this.context.gpu.handle(), this.handle, null);
+		
+		this.handle = VK_NULL_HANDLE;
+	}
+
+	private void ensureValid()
+	{
+		if(VknContext.OBJECT_VALIDATION && !isValid()) throw new RuntimeException("Image object already closed.");
 	}
 	
 	public static class Settings
 	{
-		public long size;
-		public int memoryTypeBits;
-		public int properties;
+		private final VknContext context;
+		
+		private long size;
+		private int memoryTypeBits;
+		private int properties;
+		
+		public Settings(VknContext context)
+		{
+			this.context = context;
+		}
+		
+		public VknContext context()
+		{
+			return this.context;
+		}
+		
+		public Settings size(long size)
+		{
+			this.size = size;
+			
+			return this;
+		}
+		
+		public long size()
+		{
+			return this.size;
+		}
+		
+		public Settings memoryTypeBits(int memoryTypeBits)
+		{
+			this.memoryTypeBits = memoryTypeBits;
+			
+			return this;
+		}
+		
+		public int memoryTypeBits()
+		{
+			return this.memoryTypeBits;
+		}
+		
+		public Settings properties(int properties)
+		{
+			this.properties = properties;
+			
+			return this;
+		}
+		
+		public int properties()
+		{
+			return this.properties;
+		}
+		
+		public Settings propertyHostVisible()
+		{
+			this.properties |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+			
+			return this;
+		}
+		
+		public Settings propertyHostCoherent()
+		{
+			this.properties |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+			
+			return this;
+		}
 	}
 }

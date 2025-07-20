@@ -2,20 +2,21 @@ package org.drakum.demo.vkn;
 
 import static org.lwjgl.vulkan.VK14.*;
 
-import java.lang.ref.Cleaner.Cleanable;
-
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkFenceCreateInfo;
 
 public class VknFence
 {
+	private final VknContext context;
+	
 	private long handle = VK_NULL_HANDLE;
-	private final Cleanable cleanable;
 	
 	public VknFence(Settings settings)
 	{
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
+			this.context = settings.context;
+			
 			int flags = 0;
 			if(settings.isSignaled) flags |= VK_FENCE_CREATE_SIGNALED_BIT;
 			
@@ -23,14 +24,7 @@ public class VknFence
 			fenceCreateInfo.sType$Default();
 			fenceCreateInfo.flags(flags);
 			
-			long handle = VknInternalUtils.createFence(CommonRenderContext.gpu.handle(), fenceCreateInfo, stack);
-			this.handle = handle;
-			
-			this.cleanable = VknCleanerUtils.CLEANER.register(this, () -> {
-				if(this.handle != VK_NULL_HANDLE) vkDestroyFence(CommonRenderContext.gpu.handle(), this.handle, null);
-				
-				this.handle = VK_NULL_HANDLE;
-			});
+			this.handle = VknInternalUtils.createFence(this.context.gpu.handle(), fenceCreateInfo, stack);
 		}
 	}
 
@@ -45,21 +39,21 @@ public class VknFence
 	{
 		ensureValid();
 		
-		VknInternalUtils.waitForFence(CommonRenderContext.gpu.handle(), this.handle, true, Long.MAX_VALUE);
+		VknInternalUtils.waitForFence(this.context.gpu.handle(), this.handle, true, Long.MAX_VALUE);
 	}
 	
 	public void waitFor(long timeout)
 	{
 		ensureValid();
 		
-		VknInternalUtils.waitForFence(CommonRenderContext.gpu.handle(), this.handle, true, timeout);
+		VknInternalUtils.waitForFence(this.context.gpu.handle(), this.handle, true, timeout);
 	}
 	
 	public void reset()
 	{
 		ensureValid();
 		
-		vkResetFences(CommonRenderContext.gpu.handle(), this.handle);
+		vkResetFences(this.context.gpu.handle(), this.handle);
 	}
 
 	public boolean isValid()
@@ -69,7 +63,11 @@ public class VknFence
 	
 	public void close()
 	{
-		this.cleanable.clean();
+		if(this.handle == VK_NULL_HANDLE) return;
+		
+		vkDestroyFence(this.context.gpu.handle(), this.handle, null);
+		
+		this.handle = VK_NULL_HANDLE;
 	}
 	
 	private void ensureValid()
@@ -79,70 +77,129 @@ public class VknFence
 	
 	public static void waitForAll(VknFence[] fences)
 	{
+		if(fences.length == 0) return;
+		
 		try(MemoryStack stack = MemoryStack.stackPush())
-		{
+		{		
+			VknContext context = null;
+			
 			long[] fenceHandles = new long[fences.length];
 			
 			for(int i = 0; i < fences.length; i++)
 			{
 				VknFence fence = fences[i];
-				fenceHandles[i] = fence.handle;
+				
+				if(context != null && fence.isValid()) context = fence.context;
+				
+				fenceHandles[i] = fence.handle();
 			}
 				
-			VknInternalUtils.waitForFences(CommonRenderContext.gpu.handle(), fenceHandles, true, Long.MAX_VALUE, stack);
+			VknInternalUtils.waitForFences(context.gpu.handle(), fenceHandles, true, Long.MAX_VALUE, stack);
 		}
 	}
 	
 	public static void waitForAll(VknFence[] fences, long timeout)
 	{
+		if(fences.length == 0) return;
+		
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
+			VknContext context = null;
+			
 			long[] fenceHandles = new long[fences.length];
 			
 			for(int i = 0; i < fences.length; i++)
 			{
 				VknFence fence = fences[i];
-				fenceHandles[i] = fence.handle;
+				
+				if(context != null && fence.isValid()) context = fence.context;
+				
+				fenceHandles[i] = fence.handle();
 			}
 				
-			VknInternalUtils.waitForFences(CommonRenderContext.gpu.handle(), fenceHandles, true, timeout, stack);
+			VknInternalUtils.waitForFences(context.gpu.handle(), fenceHandles, true, timeout, stack);
 		}
 	}
 	
 	public static void waitForOne(VknFence[] fences)
 	{
+		if(fences.length == 0) return;
+		
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
+			VknContext context = null;
+			
 			long[] fenceHandles = new long[fences.length];
 			
 			for(int i = 0; i < fences.length; i++)
 			{
 				VknFence fence = fences[i];
-				fenceHandles[i] = fence.handle;
+				
+				if(context != null && fence.isValid()) context = fence.context;
+				
+				fenceHandles[i] = fence.handle();
 			}
 				
-			VknInternalUtils.waitForFences(CommonRenderContext.gpu.handle(), fenceHandles, false, Long.MAX_VALUE, stack);
+			VknInternalUtils.waitForFences(context.gpu.handle(), fenceHandles, false, Long.MAX_VALUE, stack);
 		}
 	}
 	
 	public static void waitForOne(VknFence[] fences, long timeout)
 	{
+		if(fences.length == 0) return;
+		
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
+			VknContext context = null;
+			
 			long[] fenceHandles = new long[fences.length];
 			
 			for(int i = 0; i < fences.length; i++)
 			{
 				VknFence fence = fences[i];
-				fenceHandles[i] = fence.handle;
+				
+				if(context != null && fence.isValid()) context = fence.context;
+				
+				fenceHandles[i] = fence.handle();
 			}
 				
-			VknInternalUtils.waitForFences(CommonRenderContext.gpu.handle(), fenceHandles, false, timeout, stack);
+			VknInternalUtils.waitForFences(context.gpu.handle(), fenceHandles, false, timeout, stack);
 		}
 	}
 	
 	public static class Settings
 	{
-		public boolean isSignaled;
+		private final VknContext context;
+		
+		private boolean isSignaled;
+		
+		public Settings(VknContext context)
+		{
+			this.context = context;
+		}
+		
+		public VknContext context()
+		{
+			return this.context;
+		}
+		
+		public Settings isSignaled(boolean isSignaled)
+		{
+			this.isSignaled = isSignaled;
+			
+			return this;
+		}
+		
+		public boolean isSignaled()
+		{
+			return this.isSignaled;
+		}
+		
+		public Settings signaled()
+		{
+			this.isSignaled = true;
+			
+			return this;
+		}
 	}
 }

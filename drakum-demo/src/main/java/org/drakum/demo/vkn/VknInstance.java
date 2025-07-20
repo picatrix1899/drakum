@@ -5,7 +5,6 @@ import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import static org.lwjgl.vulkan.VK14.*;
 import static org.lwjgl.vulkan.KHRGetSurfaceCapabilities2.*;
 
-import java.lang.ref.Cleaner.Cleanable;
 import java.nio.LongBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,8 +24,6 @@ public class VknInstance
 {
 	private VkInstance handle;
 	private long debugMessengerHandle;
-	
-	private final Cleanable cleanable;
 	
 	public VknInstance(Settings settings)
 	{
@@ -104,16 +101,6 @@ public class VknInstance
 				
 				this.debugMessengerHandle = pMessenger.get(0);
 			}
-			
-			this.cleanable = VknCleanerUtils.CLEANER.register(this, () -> {
-				if(this.handle == null) return;
-				
-				if(this.debugMessengerHandle != 0) EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT(this.handle, this.debugMessengerHandle, null);
-
-				vkDestroyInstance(this.handle, null);
-				
-				this.handle = null;
-			});
 		}
 	}
 	
@@ -131,7 +118,13 @@ public class VknInstance
 	
 	public void close()
 	{
-		this.cleanable.clean();
+		if(this.handle == null) return;
+		
+		if(this.debugMessengerHandle != 0) EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT(this.handle, this.debugMessengerHandle, null);
+
+		vkDestroyInstance(this.handle, null);
+		
+		this.handle = null;
 	}
 	
 	private void ensureValid()
@@ -141,9 +134,54 @@ public class VknInstance
 
 	public static class Settings
 	{
-		public String applicationName;
-		public String engineName;
-		public boolean debugMode;
+		private String applicationName;
+		private String engineName;
+		private boolean debugMode;
+
+		public Settings applicationName(String applicationName)
+		{
+			this.applicationName = applicationName;
+			
+			return this;
+		}
+		
+		public String applicationName()
+		{
+			return this.applicationName;
+		}
+		
+		public Settings engineName(String engineName)
+		{
+			this.engineName = engineName;
+			
+			return this;
+		}
+		
+		public String engineName()
+		{
+			return this.engineName;
+		}
+		
+		public Settings debugMode(boolean debug)
+		{
+			this.debugMode = debug;
+			
+			return this;
+		}
+		
+		public Settings debug()
+		{
+			this.debugMode = true;
+			
+			return this;
+		}
+		
+		public boolean debugMode()
+		{
+			return this.debugMode;
+		}
+		
+		
 	}
 
 }

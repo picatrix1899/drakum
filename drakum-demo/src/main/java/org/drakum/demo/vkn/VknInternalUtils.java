@@ -5,7 +5,7 @@ import static org.lwjgl.glfw.GLFWVulkan.*;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRGetSurfaceCapabilities2.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
-import static org.lwjgl.vulkan.VK10.vkGetImageMemoryRequirements;
+import static org.lwjgl.vulkan.VK10.vkAllocateDescriptorSets;
 import static org.lwjgl.vulkan.VK14.*;
 
 import java.nio.IntBuffer;
@@ -17,6 +17,9 @@ import org.lwjgl.vulkan.VkBufferCreateInfo;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkCommandBufferAllocateInfo;
 import org.lwjgl.vulkan.VkCommandPoolCreateInfo;
+import org.lwjgl.vulkan.VkDescriptorPoolCreateInfo;
+import org.lwjgl.vulkan.VkDescriptorSetAllocateInfo;
+import org.lwjgl.vulkan.VkDescriptorSetLayoutCreateInfo;
 import org.lwjgl.vulkan.VkDevice;
 import org.lwjgl.vulkan.VkDeviceCreateInfo;
 import org.lwjgl.vulkan.VkExtent2D;
@@ -38,6 +41,7 @@ import org.lwjgl.vulkan.VkPipelineLayoutCreateInfo;
 import org.lwjgl.vulkan.VkQueue;
 import org.lwjgl.vulkan.VkQueueFamilyProperties2;
 import org.lwjgl.vulkan.VkRenderPassCreateInfo;
+import org.lwjgl.vulkan.VkSamplerCreateInfo;
 import org.lwjgl.vulkan.VkSemaphoreCreateInfo;
 import org.lwjgl.vulkan.VkShaderModuleCreateInfo;
 import org.lwjgl.vulkan.VkSurfaceCapabilities2KHR;
@@ -46,10 +50,70 @@ import org.lwjgl.vulkan.VkSwapchainCreateInfoKHR;
 
 public class VknInternalUtils
 {
+	public static long[] allocateDescriptorSets(VkDevice device, VkDescriptorSetAllocateInfo allocateInfo, int count, MemoryStack stack)
+	{
+		LongBuffer buf = stack.callocLong(count);
+		
+		vkAllocateDescriptorSets(CommonRenderContext.context.gpu.handle(), allocateInfo, buf);
+		
+		long[] result = new long[count];
+		
+		buf.get(result);
+		
+		return result;
+	}
+	
+	public static long allocateDescriptorSet(VkDevice device, VkDescriptorSetAllocateInfo allocateInfo, MemoryStack stack)
+	{
+		LongBuffer buf = stack.callocLong(1);
+		
+		vkAllocateDescriptorSets(CommonRenderContext.context.gpu.handle(), allocateInfo, buf);
+		
+		return buf.get(0);
+	}
+	
+	public static long createDescriptorSetLayout(VkDevice device, VkDescriptorSetLayoutCreateInfo createInfo, MemoryStack stack)
+	{
+		LongBuffer buf = stack.callocLong(1);
+		
+		vkCreateDescriptorSetLayout(device, createInfo, null, buf);
+		
+		return buf.get(0);
+	}
+	
+	public static long createDescriptorPool(VkDevice device, VkDescriptorPoolCreateInfo createInfo, MemoryStack stack)
+	{
+		LongBuffer buf = stack.callocLong(1);
+		
+		vkCreateDescriptorPool(CommonRenderContext.context.gpu.handle(), createInfo, null, buf);
+		
+		return buf.get(0);
+	}
+	
+	public static long createSampler(VkDevice device, VkSamplerCreateInfo createInfo, MemoryStack stack)
+	{
+		LongBuffer buf = stack.mallocLong(1);
+		
+		if (vkCreateSampler(device, createInfo, null, buf) != VK_SUCCESS)
+		{
+			throw new Error("cannot create Sampler");
+		}
+		
+		return buf.get(0);
+	}
+	
 	public static VkMemoryRequirements getImageMemoryRequirements(VkDevice device, long image, MemoryStack stack)
 	{
 		VkMemoryRequirements memReqs = VkMemoryRequirements.malloc(stack);
-		vkGetImageMemoryRequirements(CommonRenderContext.gpu.handle(), image, memReqs);
+		vkGetImageMemoryRequirements(device, image, memReqs);
+		
+		return memReqs;
+	}
+	
+	public static VkMemoryRequirements getImageMemoryRequirements(VkDevice device, long image)
+	{
+		VkMemoryRequirements memReqs = VkMemoryRequirements.malloc();
+		vkGetImageMemoryRequirements(device, image, memReqs);
 		
 		return memReqs;
 	}
@@ -57,7 +121,7 @@ public class VknInternalUtils
 	public static long createImage(VkDevice device, VkImageCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer pImage = stack.mallocLong(1);
-		vkCreateImage(CommonRenderContext.gpu.handle(), createInfo, null, pImage);
+		vkCreateImage(device, createInfo, null, pImage);
 		return pImage.get(0);
 	}
 	
@@ -163,7 +227,7 @@ public class VknInternalUtils
 		VknPhysicalGPU[] out = new VknPhysicalGPU[count];
 		for(int i = 0; i < count; i++)
 		{
-			out[i] = VknPhysicalGPU.create(new VkPhysicalDevice(buf.get(i), vkInstance));
+			out[i] = new VknPhysicalGPU(new VkPhysicalDevice(buf.get(i), vkInstance));
 		}
 		
 		return out;

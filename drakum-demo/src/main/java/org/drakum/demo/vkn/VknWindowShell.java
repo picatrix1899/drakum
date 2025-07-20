@@ -6,6 +6,21 @@ public class VknWindowShell
 {
 	private long handle;
 	
+	public VknWindowShell(Settings settings)
+	{
+		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
+		long handle = glfwCreateWindow(settings.width, settings.height, settings.title, 0, 0);
+
+		if (handle == 0)
+		{
+			throw new Error("Cannot create window");
+		}
+		
+		this.handle = handle;
+	}
+	
 	public VknWindowShell(long handle)
 	{
 		this.handle = handle;
@@ -26,29 +41,12 @@ public class VknWindowShell
 		return glfwWindowShouldClose(handle);
 	}
 	
-	public void __release()
+	public void close()
 	{
 		glfwDestroyWindow(handle);
 	}
 	
-	public static VknWindowShell create(CreateSettings settings)
-	{
-		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-		long handle = glfwCreateWindow(settings.width, settings.height, settings.title, 0, 0);
-
-		if (handle == 0)
-		{
-			throw new Error("Cannot create window");
-		}
-		
-		VknWindowShell result = new VknWindowShell(handle);
-		
-		return result;
-	}
-	
-	public static class CreateSettings
+	public static class Settings
 	{
 		public int width;
 		public int height;

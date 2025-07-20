@@ -1,5 +1,7 @@
 package org.drakum.demo.vkn;
 
+import static org.lwjgl.vulkan.VK10.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -8,6 +10,8 @@ import org.lwjgl.system.MemoryStack;
 
 public class VknPhysicalGPUList
 {	
+	private final VknContext context;
+	
 	private VknPhysicalGPU[] physicalGpus;
 	
 	public VknPhysicalGPU[] physicalGpus()
@@ -15,20 +19,46 @@ public class VknPhysicalGPUList
 		return this.physicalGpus;
 	}
 	
-	public static VknPhysicalGPUList create(CreateSettings settings)
+	public VknPhysicalGPUList(Settings settings)
 	{
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
-			VknPhysicalGPU[] physicalGpus = VknInternalUtils.enumeratePhysicalDevices(CommonRenderContext.vkInstance.handle(), stack);
+			this.context = settings.context;
+			
+			VknPhysicalGPU[] physicalGpus = VknInternalUtils.enumeratePhysicalDevices(this.context.instance.handle(), stack);
 
 			record RatedGpu(int score, VknPhysicalGPU gpu) {}
 			
 			List<RatedGpu> suitablePhysicalGpus = new ArrayList<>();
 			
+			List<RequiredFeatureProcessor> requirementProcessors = new ArrayList<>(); 
+			
+			requirementProcessors.add((gpu) -> {
+				boolean state = true;
+				
+				state = state && gpu.deviceFeatures().geometryShader == true;
+				
+				return state;
+			});
+			
+			requirementProcessors.addAll(settings.requirementProcessors);
+			
+			List<RatingProcessor> ratingProcessors = new ArrayList<>();
+			
+			ratingProcessors.add((gpu) -> {
+				int score = 0;
+				
+				if(gpu.deviceProperties().deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) score += 1000;
+				
+				return score;
+			});
+			
+			ratingProcessors.addAll(settings.ratingProcessors);
+			
 			for(VknPhysicalGPU physGpu : physicalGpus)
 			{
 				boolean meetsRequirements = true;
-				for(RequiredFeatureProcessor processor : settings.requirementProcessors)
+				for(RequiredFeatureProcessor processor : requirementProcessors)
 				{
 					if(!processor.supportsFeatures(physGpu))
 					{
@@ -40,7 +70,7 @@ public class VknPhysicalGPUList
 				if(!meetsRequirements) continue;
 
 				int score = 0;
-				for(RatingProcessor processor : settings.ratingProcessors)
+				for(RatingProcessor processor : ratingProcessors)
 				{
 					score += processor.rate(physGpu);
 				}
@@ -59,17 +89,26 @@ public class VknPhysicalGPUList
 				sortedPhysicalGpus[i] = suitablePhysicalGpus.get(i).gpu;
 			}
 			
-			VknPhysicalGPUList result = new VknPhysicalGPUList();
-			result.physicalGpus = sortedPhysicalGpus;
-			
-			return result;
+			this.physicalGpus = sortedPhysicalGpus;
 		}
 	}
 	
-	public static class CreateSettings
+	public static class Settings
 	{
+		private final VknContext context;
+		
 		public final List<RequiredFeatureProcessor> requirementProcessors = new ArrayList<>(); 
 		public final List<RatingProcessor> ratingProcessors = new ArrayList<>();
+		
+		public Settings(VknContext context)
+		{
+			this.context = context;
+		}
+		
+		public VknContext context()
+		{
+			return this.context;
+		}
 	}
 	
 	public static interface RequiredFeatureProcessor

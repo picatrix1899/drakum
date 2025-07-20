@@ -6,44 +6,119 @@ import static org.lwjgl.vulkan.VK14.*;
 
 import java.nio.IntBuffer;
 
+import org.barghos.util.container.ints.Extent2I;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkCommandBufferAllocateInfo;
 import org.lwjgl.vulkan.VkCommandPoolCreateInfo;
-import org.lwjgl.vulkan.VkComponentMapping;
-import org.lwjgl.vulkan.VkExtent2D;
-import org.lwjgl.vulkan.VkFramebufferCreateInfo;
-import org.lwjgl.vulkan.VkImageBlit;
-import org.lwjgl.vulkan.VkImageMemoryBarrier;
-import org.lwjgl.vulkan.VkImageSubresourceRange;
-import org.lwjgl.vulkan.VkImageViewCreateInfo;
 import org.lwjgl.vulkan.VkPresentInfoKHR;
 import org.lwjgl.vulkan.VkSubmitInfo;
 import org.lwjgl.vulkan.VkSwapchainCreateInfoKHR;
 
 public class VknSwapchain
 {
-	public long handle;
-	public long[] swapchainImages;
-	public long[] swapchainImageViews;
-	public long[] swapchainFramebuffers;
+	private final VknContext context;
+	
+	private long handle;
+	
+	private VknExternalImage2D[] swapchainImages;
+	private VknImageView2D[] swapchainImageViews;
+	private VknFramebuffer2D[] swapchainFramebuffers;
 
-	public VknRenderPass presentRenderPass;
+	private VknRenderPass presentRenderPass;
 	
-	public VknSemaphore[] imageAvailableSemaphore;
-	public VknSemaphore[] renderFinishedSemaphore;
-	public VknFence[] inFlightFence;
-	public long[] commandPool;
-	public VkCommandBuffer[] commandBuffer;
-	public VknExtent2D framebufferExtent;
+	private VknSemaphore[] imageAvailableSemaphore;
+	private VknSemaphore[] renderFinishedSemaphore;
+	private VknFence[] inFlightFence;
+	private long[] commandPools;
+	private VkCommandBuffer[] commandBuffers;
 	
-	public int inFlightFrameCount;
-	public int swapchainImageCount;
+	private Extent2I framebufferExtent;
 	
-	public int currentInFlightFrame;
-	public int currentImageIndex;
+	private int inFlightFrameCount;
+	private int swapchainImageCount;
 	
-	public VknSurface surface;
+	private int currentInFlightFrame;
+	private int currentImageIndex;
+	
+	private VknSurface surface;
+
+	public VknSwapchain(Settings settings)
+	{
+		try(MemoryStack stack = MemoryStack.stackPush())
+		{
+			this.context = settings.context;
+			
+			this.inFlightFrameCount = settings.inFlightFrameCount;
+			this.framebufferExtent = settings.framebufferExtent;
+			this.surface = settings.surface;
+			this.swapchainImageCount = settings.swapchainImageCount;
+			
+			createPresentRenderPass();
+			createInflightControls(stack);
+			
+			recreate(this.framebufferExtent);
+		}
+	}
+	
+	private void createPresentRenderPass()
+	{
+		VknRenderPass.Attachment renderpassAttachment = new VknRenderPass.Attachment();
+		renderpassAttachment.format = this.surface.idealFormat().format;
+		renderpassAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		renderpassAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		
+		VknRenderPass.Subpass renderpassSubpass = new VknRenderPass.Subpass();
+		renderpassSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		renderpassSubpass.addColorAttachmentReference(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		
+		VknRenderPass.Settings renderpassCreateSettings = new VknRenderPass.Settings(this.context);
+		renderpassCreateSettings.attachments.add(renderpassAttachment);
+		renderpassCreateSettings.subpasses.add(renderpassSubpass);
+
+		this.presentRenderPass = new VknRenderPass(renderpassCreateSettings);
+	}
+	
+	private void createInflightControls(MemoryStack stack)
+	{
+		VknSemaphore[] imageAvailableSemaphores = new VknSemaphore[this.inFlightFrameCount];
+		VknSemaphore[] renderFinishedSemaphores = new VknSemaphore[this.inFlightFrameCount];
+		VknFence[] inFlightFences = new VknFence[this.inFlightFrameCount];
+		
+		long[] commandPools = new long[this.inFlightFrameCount];
+		VkCommandBuffer[] commandBuffers = new VkCommandBuffer[this.inFlightFrameCount];
+		
+		for(int i = 0; i < this.inFlightFrameCount; i++)
+		{
+			imageAvailableSemaphores[i] = new VknSemaphore(new VknSemaphore.Settings(this.context));
+			
+			renderFinishedSemaphores[i] = new VknSemaphore(new VknSemaphore.Settings(this.context));
+
+			inFlightFences[i] = new VknFence(new VknFence.Settings(this.context).signaled());
+			
+			VkCommandPoolCreateInfo commandPoolCreateInfo = VkCommandPoolCreateInfo.calloc(stack);
+			commandPoolCreateInfo.sType$Default();
+			commandPoolCreateInfo.flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+			commandPoolCreateInfo.queueFamilyIndex(this.context.gpu.queueFamilies().graphicsFamily);
+
+			commandPools[i] = VknInternalUtils.createCommandPool(this.context.gpu.handle(), commandPoolCreateInfo, stack);
+
+			VkCommandBufferAllocateInfo commandBufferAllocateInfo = VkCommandBufferAllocateInfo.calloc(stack);
+			commandBufferAllocateInfo.sType$Default();
+			commandBufferAllocateInfo.commandPool(commandPools[i]);
+			commandBufferAllocateInfo.level(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+			commandBufferAllocateInfo.commandBufferCount(1);
+
+			commandBuffers[i] = VknInternalUtils.allocateCommandBuffer(this.context.gpu.handle(), commandBufferAllocateInfo, stack);
+		}
+		
+		this.imageAvailableSemaphore = imageAvailableSemaphores;
+		this.renderFinishedSemaphore = renderFinishedSemaphores;
+		this.inFlightFence = inFlightFences;
+		
+		this.commandPools = commandPools;
+		this.commandBuffers = commandBuffers;
+	}
 	
 	public long handle()
 	{
@@ -57,14 +132,14 @@ public class VknSwapchain
 	
 	public VkCommandBuffer currentCmdBuffer()
 	{
-		return this.commandBuffer[this.currentInFlightFrame];
+		return this.commandBuffers[this.currentInFlightFrame];
 	}
 	
 	public int acquireNextImage(VknSemaphore imageAvailableSemaphore)
 	{	
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
-			VknInternalUtils.IntResult result = VknInternalUtils.acquireNextImage(CommonRenderContext.gpu.handle(), this.handle, imageAvailableSemaphore.handle(), stack);
+			VknInternalUtils.IntResult result = VknInternalUtils.acquireNextImage(this.context.gpu.handle(), this.handle, imageAvailableSemaphore.handle(), stack);
 			
 			return result.result;
 		}
@@ -79,7 +154,7 @@ public class VknSwapchain
 		
 		this.currentImageIndex = acquireNextImage(this.imageAvailableSemaphore[this.currentInFlightFrame]);
 		
-		vkResetCommandBuffer(this.commandBuffer[this.currentInFlightFrame], 0);
+		vkResetCommandBuffer(this.commandBuffers[this.currentInFlightFrame], 0);
 	}
 	
 	public void endFrame()
@@ -91,10 +166,10 @@ public class VknSwapchain
 			submitInfo.pWaitSemaphores(stack.longs(this.imageAvailableSemaphore[this.currentInFlightFrame].handle()));
 			submitInfo.waitSemaphoreCount(1);
 			submitInfo.pWaitDstStageMask(stack.ints(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT));
-			submitInfo.pCommandBuffers(stack.pointers(this.commandBuffer[this.currentInFlightFrame]));
+			submitInfo.pCommandBuffers(stack.pointers(this.commandBuffers[this.currentInFlightFrame]));
 			submitInfo.pSignalSemaphores(stack.longs(this.renderFinishedSemaphore[this.currentInFlightFrame].handle()));
 
-			vkQueueSubmit(CommonRenderContext.gpu.graphicsQueue(), submitInfo, this.inFlightFence[this.currentInFlightFrame].handle());
+			vkQueueSubmit(this.context.gpu.graphicsQueue(), submitInfo, this.inFlightFence[this.currentInFlightFrame].handle());
 
 			VkPresentInfoKHR presentInfo = VkPresentInfoKHR.calloc(stack);
 			presentInfo.sType$Default();
@@ -103,84 +178,73 @@ public class VknSwapchain
 			presentInfo.pSwapchains(stack.longs(this.handle));
 			presentInfo.pImageIndices(stack.ints(this.currentImageIndex));
 			
-			vkQueuePresentKHR(CommonRenderContext.gpu.presentQueue(), presentInfo);
+			vkQueuePresentKHR(this.context.gpu.presentQueue(), presentInfo);
 		}
 	}
 	
-	public void cmdPresent(VknImage sceneImage, MemoryStack stack)
+	public void cmdPresent(VknImage2D sceneImage, MemoryStack stack)
 	{
-		new VknCmdImageMemoryBarrier(this.commandBuffer[this.currentInFlightFrame], sceneImage.handle())
+		new VknCmdImageMemoryBarrier(this.commandBuffers[this.currentInFlightFrame], sceneImage.handle())
 		.layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
 		.accessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT)
 		.stageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT)
 		.run();
 
-		new VknCmdImageMemoryBarrier(this.commandBuffer[this.currentInFlightFrame], this.swapchainImages[this.currentImageIndex])
+		new VknCmdImageMemoryBarrier(this.commandBuffers[this.currentInFlightFrame], this.swapchainImages[this.currentImageIndex])
 		.layout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
 		.accessMask(0, VK_ACCESS_TRANSFER_WRITE_BIT)
 		.stageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT)
 		.run();
-		
-		VkImageBlit.Buffer blitRegion = VkImageBlit.calloc(1, stack);
 
-		// Source: full scene image
-		blitRegion.srcSubresource().aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
-		blitRegion.srcSubresource().mipLevel(0);
-		blitRegion.srcSubresource().baseArrayLayer(0);
-		blitRegion.srcSubresource().layerCount(1);
-		blitRegion.srcOffsets(0).set(0, 0, 0);
-		blitRegion.srcOffsets(1).set(this.framebufferExtent.width, this.framebufferExtent.height, 1);
-
-		// Destination: full swapchain image
-		blitRegion.dstSubresource().aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
-		blitRegion.dstSubresource().mipLevel(0);
-		blitRegion.dstSubresource().baseArrayLayer(0);
-		blitRegion.dstSubresource().layerCount(1);
-		blitRegion.dstOffsets(0).set(0, 0, 0);
-		blitRegion.dstOffsets(1).set(this.framebufferExtent.width, this.framebufferExtent.height, 1);
+		VknUtil.cmdBlitImage(
+				this.commandBuffers[this.currentInFlightFrame], sceneImage.handle(), 0, 0, 0, this.framebufferExtent.width(), this.framebufferExtent.height(), 1, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				this.swapchainImages[this.currentImageIndex].handle(), 0, 0, 0, this.framebufferExtent.width(), this.framebufferExtent.height(), 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_FILTER_LINEAR, stack);
 		
-		vkCmdBlitImage(this.commandBuffer[this.currentInFlightFrame], sceneImage.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, this.swapchainImages[this.currentImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blitRegion, VK_FILTER_LINEAR );
-		
-		new VknCmdImageMemoryBarrier(this.commandBuffer[this.currentInFlightFrame], this.swapchainImages[this.currentImageIndex])
+		new VknCmdImageMemoryBarrier(this.commandBuffers[this.currentInFlightFrame], this.swapchainImages[this.currentImageIndex])
 		.layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
 		.accessMask(VK_ACCESS_TRANSFER_WRITE_BIT, 0)
 		.stageMask(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
 		.run();
 
-		new VknCmdImageMemoryBarrier(this.commandBuffer[this.currentInFlightFrame], sceneImage.handle())
+		new VknCmdImageMemoryBarrier(this.commandBuffers[this.currentInFlightFrame], sceneImage.handle())
 		.layout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		.accessMask(VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT)
 		.stageMask(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
 		.run();
 	}
 	
-	public void recreate(VknExtent2D framebufferExtent)
+	public void recreate(Extent2I framebufferExtent)
 	{
-		vkDeviceWaitIdle(CommonRenderContext.gpu.handle());
-		
-		for(long framebuffer : this.swapchainFramebuffers)
-		{
-			vkDestroyFramebuffer(CommonRenderContext.gpu.handle(), framebuffer, null);
-		}
-		
-		for(long imageView : this.swapchainImageViews)
-		{
-			vkDestroyImageView(CommonRenderContext.gpu.handle(), imageView, null);
-		}
-
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
+			this.framebufferExtent = framebufferExtent;
 			
-			VkExtent2D imageExtent = VkExtent2D.calloc(stack);
-			imageExtent.width(framebufferExtent.width);
-			imageExtent.height(framebufferExtent.height);
+			long oldHandle = this.handle;
 			
+			if(oldHandle != VK_NULL_HANDLE) vkDeviceWaitIdle(this.context.gpu.handle());
+			
+			if(this.swapchainFramebuffers != null)
+			{
+				for(VknFramebuffer2D framebuffer : this.swapchainFramebuffers)
+				{
+					framebuffer.close();
+				}
+			}
+			
+			if(this.swapchainImageViews != null)
+			{
+				for(VknImageView2D imageView : this.swapchainImageViews)
+				{
+					imageView.close();
+				}
+			}
+
 			int sharingMode = 0;
 			IntBuffer familyIndices = null;
-			if(CommonRenderContext.gpu.queueFamilies().graphicsFamily != CommonRenderContext.gpu.queueFamilies().presentFamily)
+			if(this.context.gpu.queueFamilies().graphicsFamily != this.context.gpu.queueFamilies().presentFamily)
 			{
 				sharingMode = VK_SHARING_MODE_CONCURRENT;
-				familyIndices = stack.ints(CommonRenderContext.gpu.queueFamilies().graphicsFamily, CommonRenderContext.gpu.queueFamilies().presentFamily);
+				familyIndices = stack.ints(this.context.gpu.queueFamilies().graphicsFamily, this.context.gpu.queueFamilies().presentFamily);
 			}
 			else
 			{
@@ -193,272 +257,118 @@ public class VknSwapchain
 			swapchainCreateInfo.minImageCount(this.swapchainImageCount);
 			swapchainCreateInfo.imageFormat(this.surface.idealFormat().format);
 			swapchainCreateInfo.imageColorSpace(this.surface.idealFormat().colorSpace);
-			swapchainCreateInfo.imageExtent(imageExtent);
+			swapchainCreateInfo.imageExtent().width(framebufferExtent.width()).height(framebufferExtent.height());
 			swapchainCreateInfo.imageArrayLayers(1);
 			swapchainCreateInfo.imageUsage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 			swapchainCreateInfo.imageSharingMode(sharingMode);
 			swapchainCreateInfo.pQueueFamilyIndices(familyIndices);
 			swapchainCreateInfo.preTransform(this.surface.capabilities().currentTransform);
 			swapchainCreateInfo.compositeAlpha(VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR);
-			swapchainCreateInfo.presentMode(VK_PRESENT_MODE_MAILBOX_KHR);
+			//swapchainCreateInfo.presentMode(VK_PRESENT_MODE_MAILBOX_KHR);
+			swapchainCreateInfo.presentMode(VK_PRESENT_MODE_IMMEDIATE_KHR);
 			swapchainCreateInfo.clipped(true);
-			swapchainCreateInfo.oldSwapchain(this.handle);
+			if(oldHandle != VK_NULL_HANDLE) swapchainCreateInfo.oldSwapchain(oldHandle);
 			
-			long handle = VknInternalUtils.createSwapchain(CommonRenderContext.gpu.handle(), swapchainCreateInfo, stack);
+			this.handle = VknInternalUtils.createSwapchain(this.context.gpu.handle(), swapchainCreateInfo, stack);
 
-			long[] swapchainImages = VknInternalUtils.getSwapchainImages(CommonRenderContext.gpu.handle(), handle, stack);
-			long[] swapchainImageViews = new long[swapchainImages.length];
-
-			for(int i = 0; i < swapchainImages.length; i++)
-			{
-				VkComponentMapping componentMapping = VkComponentMapping.calloc(stack);
-				componentMapping.r(VK_COMPONENT_SWIZZLE_IDENTITY);
-				componentMapping.g(VK_COMPONENT_SWIZZLE_IDENTITY);
-				componentMapping.b(VK_COMPONENT_SWIZZLE_IDENTITY);
-				componentMapping.a(VK_COMPONENT_SWIZZLE_IDENTITY);
-
-				VkImageSubresourceRange subresourceRange = VkImageSubresourceRange.calloc(stack);
-				subresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
-				subresourceRange.baseMipLevel(0);
-				subresourceRange.levelCount(1);
-				subresourceRange.baseArrayLayer(0);
-				subresourceRange.layerCount(1);
-
-				VkImageViewCreateInfo imageViewCreateInfo = VkImageViewCreateInfo.calloc(stack);
-				imageViewCreateInfo.sType$Default();
-				imageViewCreateInfo.image(swapchainImages[i]);
-				imageViewCreateInfo.viewType(VK_IMAGE_VIEW_TYPE_2D);
-				imageViewCreateInfo.format(this.surface.idealFormat().format);
-				imageViewCreateInfo.components(componentMapping);
-				imageViewCreateInfo.subresourceRange(subresourceRange);
-
-				swapchainImageViews[i] = VknInternalUtils.createImageView(CommonRenderContext.gpu.handle(), imageViewCreateInfo, stack);
-			}
+			long[] rawSwapchainImages = VknInternalUtils.getSwapchainImages(this.context.gpu.handle(), handle, stack);
 			
-			long[] swapchainFramebuffers = new long[swapchainImageViews.length];
-
-			for(int i = 0; i < swapchainImageViews.length; i++)
+			VknExternalImage2D[] swapchainImages = new VknExternalImage2D[rawSwapchainImages.length];
+			VknImageView2D[] swapchainImageViews = new VknImageView2D[rawSwapchainImages.length];
+			VknFramebuffer2D[] swapchainFramebuffers = new VknFramebuffer2D[rawSwapchainImages.length];
+			
+			for(int i = 0; i < rawSwapchainImages.length; i++)
 			{
-				VkFramebufferCreateInfo framebufferCreateInfo = VkFramebufferCreateInfo.calloc(stack);
-				framebufferCreateInfo.sType$Default();
-				framebufferCreateInfo.renderPass(presentRenderPass.handle());
-				framebufferCreateInfo.attachmentCount(1);
-				framebufferCreateInfo.pAttachments(stack.longs(swapchainImageViews[i]));
-				framebufferCreateInfo.width(framebufferExtent.width);
-				framebufferCreateInfo.height(framebufferExtent.height);
-				framebufferCreateInfo.layers(1);
+				VknExternalImage2D image = new VknExternalImage2D(new VknExternalImage2D.Settings(this.context).handle(rawSwapchainImages[i]).format(this.surface.idealFormat().format).size(this.framebufferExtent));
+				swapchainImages[i] = image;
 				
-				swapchainFramebuffers[i] = VknInternalUtils.createFramebuffer(CommonRenderContext.gpu.handle(), framebufferCreateInfo, stack);
+				VknImageView2D view = image.createView();
+				swapchainImageViews[i] = view;
+				
+				VknFramebuffer2D.Settings framebufferSettings = new VknFramebuffer2D.Settings(this.context);
+				framebufferSettings.size(this.framebufferExtent);
+				framebufferSettings.renderPass(presentRenderPass);
+				framebufferSettings.addAttachment(view);
+				
+				swapchainFramebuffers[i] = new VknFramebuffer2D(framebufferSettings);
 			}
-		
-			vkDestroySwapchainKHR(CommonRenderContext.gpu.handle(), this.handle, null);
 			
-			this.handle = handle;
+			this.swapchainImages = swapchainImages;
 			this.swapchainImageViews = swapchainImageViews;
 			this.swapchainFramebuffers = swapchainFramebuffers;
-			this.swapchainImages = swapchainImages;
-			this.framebufferExtent = framebufferExtent;
+		
+			if(oldHandle != VK_NULL_HANDLE) vkDestroySwapchainKHR(this.context.gpu.handle(), oldHandle, null);
 		}
 	}
 	
-	public void __release()
+	public void close()
 	{
+		if(this.handle == VK_NULL_HANDLE) return;
+		
 		for(VknSemaphore semaphore : this.imageAvailableSemaphore)
 		{
-			semaphore.__release();
+			semaphore.close();
 		}
+		
+		this.imageAvailableSemaphore = null;
 		
 		for(VknSemaphore semaphore : this.renderFinishedSemaphore)
 		{
-			semaphore.__release();
+			semaphore.close();
 		}
+		
+		this.renderFinishedSemaphore = null;
 		
 		for(VknFence fence : this.inFlightFence)
 		{
 			fence.close();
 		}
 		
-		for(long commandPool : this.commandPool)
+		this.inFlightFence = null;
+		
+		for(long commandPool : this.commandPools)
 		{
-			vkDestroyCommandPool(CommonRenderContext.gpu.handle(), commandPool, null);
+			vkDestroyCommandPool(this.context.gpu.handle(), commandPool, null);
 		}
 		
-		for(long framebuffer : this.swapchainFramebuffers)
+		this.commandPools = null;
+		
+		for(VknFramebuffer2D framebuffer : this.swapchainFramebuffers)
 		{
-			vkDestroyFramebuffer(CommonRenderContext.gpu.handle(), framebuffer, null);
+			framebuffer.close();
 		}
 		
-		for(long imageView : this.swapchainImageViews)
+		this.swapchainFramebuffers = null;
+		
+		for(VknImageView2D imageView : this.swapchainImageViews)
 		{
-			vkDestroyImageView(CommonRenderContext.gpu.handle(), imageView, null);
+			imageView.close();
 		}
 		
-		this.presentRenderPass.__release();
+		this.presentRenderPass.close();
 		
-		vkDestroySwapchainKHR(CommonRenderContext.gpu.handle(), this.handle, null);
-	}
-	
-	public static VknSwapchain create(CreateSettings settings)
-	{
-		try(MemoryStack stack = MemoryStack.stackPush())
-		{
-			VknRenderPass.Attachment renderpassAttachment = new VknRenderPass.Attachment();
-			renderpassAttachment.format = settings.surface.idealFormat().format;
-			renderpassAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-			renderpassAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-			VknRenderPass.SubpassAttachmentRef renderpassSubpassRef = new VknRenderPass.SubpassAttachmentRef();
-			renderpassSubpassRef.attachementIndex = 0;
-			renderpassSubpassRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			
-			VknRenderPass.Subpass renderpassSubpass = new VknRenderPass.Subpass();
-			renderpassSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-			renderpassSubpass.colorAttachmentReferences.add(renderpassSubpassRef);
-
-			VknRenderPass.CreateSettings renderpassCreateSettings = new VknRenderPass.CreateSettings();
-			renderpassCreateSettings.attachments.add(renderpassAttachment);
-			renderpassCreateSettings.subpasses.add(renderpassSubpass);
-
-			VknRenderPass presentRenderPass = VknRenderPass.create(renderpassCreateSettings);
-			
-			VkExtent2D imageExtent = VkExtent2D.calloc(stack);
-			imageExtent.width(settings.framebufferExtent.width);
-			imageExtent.height(settings.framebufferExtent.height);
-			
-			int sharingMode = 0;
-			IntBuffer familyIndices = null;
-			if(CommonRenderContext.gpu.queueFamilies().graphicsFamily != CommonRenderContext.gpu.queueFamilies().presentFamily)
-			{
-				sharingMode = VK_SHARING_MODE_CONCURRENT;
-				familyIndices = stack.ints(CommonRenderContext.gpu.queueFamilies().graphicsFamily, CommonRenderContext.gpu.queueFamilies().presentFamily);
-			}
-			else
-			{
-				sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-			}
-			
-			VkSwapchainCreateInfoKHR swapchainCreateInfo = VkSwapchainCreateInfoKHR.calloc(stack);
-			swapchainCreateInfo.sType$Default();
-			swapchainCreateInfo.surface(settings.surface.handle());
-			swapchainCreateInfo.minImageCount(settings.swapchainImageCount);
-			swapchainCreateInfo.imageFormat(settings.surface.idealFormat().format);
-			swapchainCreateInfo.imageColorSpace(settings.surface.idealFormat().colorSpace);
-			swapchainCreateInfo.imageExtent(imageExtent);
-			swapchainCreateInfo.imageArrayLayers(1);
-			swapchainCreateInfo.imageUsage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-			swapchainCreateInfo.imageSharingMode(sharingMode);
-			swapchainCreateInfo.pQueueFamilyIndices(familyIndices);
-			swapchainCreateInfo.preTransform(settings.surface.capabilities().currentTransform);
-			swapchainCreateInfo.compositeAlpha(VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR);
-			swapchainCreateInfo.presentMode(VK_PRESENT_MODE_MAILBOX_KHR);
-			swapchainCreateInfo.clipped(true);
-			
-			long handle = VknInternalUtils.createSwapchain(CommonRenderContext.gpu.handle(), swapchainCreateInfo, stack);
-
-			long[] swapchainImages = VknInternalUtils.getSwapchainImages(CommonRenderContext.gpu.handle(), handle, stack);
-			long[] swapchainImageViews = new long[swapchainImages.length];
-
-			for(int i = 0; i < swapchainImages.length; i++)
-			{
-				VkComponentMapping componentMapping = VkComponentMapping.calloc(stack);
-				componentMapping.r(VK_COMPONENT_SWIZZLE_IDENTITY);
-				componentMapping.g(VK_COMPONENT_SWIZZLE_IDENTITY);
-				componentMapping.b(VK_COMPONENT_SWIZZLE_IDENTITY);
-				componentMapping.a(VK_COMPONENT_SWIZZLE_IDENTITY);
-
-				VkImageSubresourceRange subresourceRange = VkImageSubresourceRange.calloc(stack);
-				subresourceRange.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
-				subresourceRange.baseMipLevel(0);
-				subresourceRange.levelCount(1);
-				subresourceRange.baseArrayLayer(0);
-				subresourceRange.layerCount(1);
-
-				VkImageViewCreateInfo imageViewCreateInfo = VkImageViewCreateInfo.calloc(stack);
-				imageViewCreateInfo.sType$Default();
-				imageViewCreateInfo.image(swapchainImages[i]);
-				imageViewCreateInfo.viewType(VK_IMAGE_VIEW_TYPE_2D);
-				imageViewCreateInfo.format(settings.surface.idealFormat().format);
-				imageViewCreateInfo.components(componentMapping);
-				imageViewCreateInfo.subresourceRange(subresourceRange);
-
-				swapchainImageViews[i] = VknInternalUtils.createImageView(CommonRenderContext.gpu.handle(), imageViewCreateInfo, stack);
-			}
-			
-			long[] swapchainFramebuffers = new long[swapchainImageViews.length];
-
-			for(int i = 0; i < swapchainImageViews.length; i++)
-			{
-				VkFramebufferCreateInfo framebufferCreateInfo = VkFramebufferCreateInfo.calloc(stack);
-				framebufferCreateInfo.sType$Default();
-				framebufferCreateInfo.renderPass(presentRenderPass.handle());
-				framebufferCreateInfo.attachmentCount(1);
-				framebufferCreateInfo.pAttachments(stack.longs(swapchainImageViews[i]));
-				framebufferCreateInfo.width(settings.framebufferExtent.width);
-				framebufferCreateInfo.height(settings.framebufferExtent.height);
-				framebufferCreateInfo.layers(1);
-
-				swapchainFramebuffers[i] = VknInternalUtils.createFramebuffer(CommonRenderContext.gpu.handle(), framebufferCreateInfo, stack);
-			}
-			
-			VknSemaphore[] imageAvailableSemaphores = new VknSemaphore[settings.inFlightFrameCount];
-			VknSemaphore[] renderFinishedSemaphores = new VknSemaphore[settings.inFlightFrameCount];
-			VknFence[] inFlightFences = new VknFence[settings.inFlightFrameCount];
-			
-			long[] commandPools = new long[settings.inFlightFrameCount];
-			VkCommandBuffer[] commandBuffers = new VkCommandBuffer[settings.inFlightFrameCount];
-			
-			for(int i = 0; i < settings.inFlightFrameCount; i++)
-			{
-				imageAvailableSemaphores[i] = VknSemaphore.create();
-				
-				renderFinishedSemaphores[i] = VknSemaphore.create();
-
-				VknFence.Settings fenceCreateSettings = new VknFence.Settings();
-				fenceCreateSettings.isSignaled = true;
-				
-				inFlightFences[i] = new VknFence(fenceCreateSettings);
-				
-				VkCommandPoolCreateInfo commandPoolCreateInfo = VkCommandPoolCreateInfo.calloc(stack);
-				commandPoolCreateInfo.sType$Default();
-				commandPoolCreateInfo.flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-				commandPoolCreateInfo.queueFamilyIndex(CommonRenderContext.gpu.queueFamilies().graphicsFamily);
-
-				commandPools[i] = VknInternalUtils.createCommandPool(CommonRenderContext.gpu.handle(), commandPoolCreateInfo, stack);
-
-				VkCommandBufferAllocateInfo commandBufferAllocateInfo = VkCommandBufferAllocateInfo.calloc(stack);
-				commandBufferAllocateInfo.sType$Default();
-				commandBufferAllocateInfo.commandPool(commandPools[i]);
-				commandBufferAllocateInfo.level(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-				commandBufferAllocateInfo.commandBufferCount(1);
-
-				commandBuffers[i] = VknInternalUtils.allocateCommandBuffer(CommonRenderContext.gpu.handle(), commandBufferAllocateInfo, stack);
-			}
-			
-			VknSwapchain result = new VknSwapchain();
-			result.handle = handle;
-			result.swapchainImageViews = swapchainImageViews;
-			result.swapchainFramebuffers = swapchainFramebuffers;
-			result.presentRenderPass = presentRenderPass;
-			result.imageAvailableSemaphore = imageAvailableSemaphores;
-			result.renderFinishedSemaphore = renderFinishedSemaphores;
-			result.inFlightFence = inFlightFences;
-			result.commandPool = commandPools;
-			result.commandBuffer = commandBuffers;
-			result.inFlightFrameCount = settings.inFlightFrameCount;
-			result.swapchainImages = swapchainImages;
-			result.framebufferExtent = settings.framebufferExtent;
-			result.surface = settings.surface;
-			result.swapchainImageCount = settings.swapchainImageCount;
-			
-			return result;
-		}
+		vkDestroySwapchainKHR(this.context.gpu.handle(), this.handle, null);
+		
+		this.handle = VK_NULL_HANDLE;
 	}
 
-	public static class CreateSettings
+	public static class Settings
 	{
+		private final VknContext context;
+		
 		public int swapchainImageCount;
 		public VknSurface surface;
 		public int inFlightFrameCount;
-		public VknExtent2D framebufferExtent;
+		public Extent2I framebufferExtent;
+		
+		public Settings(VknContext context)
+		{
+			this.context = context;
+		}
+		
+		public VknContext context()
+		{
+			return this.context;
+		}
 	}
 }

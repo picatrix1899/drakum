@@ -11,7 +11,17 @@ public class VknPhysicalGPU
 	private VknPhysicalGPUMemoryProperties memoryProperties;
 	private VknQueueFamilyProperties[] queueFamilyPropertyListArray;
 	
-	private VknPhysicalGPU() {}
+	public VknPhysicalGPU(VkPhysicalDevice physicalDevice)
+	{
+		try(MemoryStack stack = MemoryStack.stackPush())
+		{
+			this.handle = physicalDevice;
+			this.deviceProperties = VknInternalUtils.getPhysicalDeviceProperties(this.handle, stack);
+			this.deviceFeatures = VknInternalUtils.getPhysicalDeviceFeatures(this.handle, stack);
+			this.memoryProperties = VknInternalUtils.getPhysicalDeviceMemoryProperties(this.handle, stack);
+			this.queueFamilyPropertyListArray = VknInternalUtils.getPhysicalDeviceQueueFamilyProperties(this.handle, stack);
+		}
+	}
 	
 	public VkPhysicalDevice handle()
 	{
@@ -54,20 +64,5 @@ public class VknPhysicalGPU
 		}
 		
 		throw new Error();
-	}
-	
-	public static VknPhysicalGPU create(VkPhysicalDevice physicalDevice)
-	{
-		try(MemoryStack stack = MemoryStack.stackPush())
-		{
-			VknPhysicalGPU result = new VknPhysicalGPU();
-			result.handle = physicalDevice;
-			result.deviceProperties = VknInternalUtils.getPhysicalDeviceProperties(physicalDevice, stack);
-			result.deviceFeatures = VknInternalUtils.getPhysicalDeviceFeatures(physicalDevice, stack);
-			result.memoryProperties = VknInternalUtils.getPhysicalDeviceMemoryProperties(physicalDevice, stack);
-			result.queueFamilyPropertyListArray = VknInternalUtils.getPhysicalDeviceQueueFamilyProperties(physicalDevice, stack);
-			
-			return result;
-		}
 	}
 }

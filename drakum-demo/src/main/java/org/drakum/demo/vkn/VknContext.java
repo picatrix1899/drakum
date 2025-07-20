@@ -8,4 +8,8 @@ public class VknContext
 	{
 		OBJECT_VALIDATION = VknConfig.OBJECT_VALIDATION;
 	}
+	
+	public VknInstance instance;
+	public VknGPU gpu;
+	public VknCommandPool commandPool;
 }

@@ -3,7 +3,6 @@ package org.drakum.demo.vkn;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkImageMemoryBarrier;
-import org.lwjgl.vulkan.VkImageSubresourceRange;
 
 import static org.lwjgl.vulkan.VK14.*;
 
@@ -34,6 +33,12 @@ public class VknCmdImageMemoryBarrier
 	{
 		this.cmdBuffer = cmdBuffer;
 		this.image = image;
+	}
+	
+	public VknCmdImageMemoryBarrier(VkCommandBuffer cmdBuffer, IVknImage2D image)
+	{
+		this.cmdBuffer = cmdBuffer;
+		this.image = image.handle();
 	}
 	
 	public VknCmdImageMemoryBarrier layout(int src, int dst)
@@ -92,12 +97,7 @@ public class VknCmdImageMemoryBarrier
 			imageMemoryBarrier.srcQueueFamilyIndex(this.srcQueueFamilyIndex);
 			imageMemoryBarrier.dstQueueFamilyIndex(this.dstQueueFamilyIndex);
 			imageMemoryBarrier.image(this.image);
-			imageMemoryBarrier.subresourceRange()
-				.aspectMask(this.aspectMask)
-				.baseMipLevel(this.baseMipLevel)
-				.levelCount(this.levelCount)
-				.baseArrayLayer(this.baseArrayLayer)
-				.layerCount(this.layerCount);
+			imageMemoryBarrier.subresourceRange().aspectMask(this.aspectMask).baseMipLevel(this.baseMipLevel).levelCount(this.levelCount).baseArrayLayer(this.baseArrayLayer).layerCount(this.layerCount);
 			
 			vkCmdPipelineBarrier(this.cmdBuffer, this.srcStageMask, this.dstStageMask, 0, null, null, imageMemoryBarrier);
 		}
