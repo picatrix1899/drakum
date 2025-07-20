@@ -58,8 +58,8 @@ public class MaterialType
 				
 				VkDescriptorImageInfo.Buffer imageInfo = VkDescriptorImageInfo.calloc(1, stack);
 				imageInfo.imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-				imageInfo.imageView(material.textures.get(MaterialType.TEXTURE_ALBEDO).imageView().handle());
-				imageInfo.sampler(material.samplers.get(MaterialType.TEXTURE_ALBEDO).handle());
+				imageInfo.imageView(material.textures.get(MaterialType.TEXTURE_ALBEDO).imageView().handle().handle());
+				imageInfo.sampler(material.samplers.get(MaterialType.TEXTURE_ALBEDO).handle().handle());
 				
 				VkWriteDescriptorSet.Buffer writeDescriptorSet = VkWriteDescriptorSet.calloc(1, stack);
 				writeDescriptorSet.get(0).sType$Default();

@@ -11,6 +11,8 @@ import static org.lwjgl.vulkan.VK14.*;
 import java.nio.IntBuffer;
 import java.nio.LongBuffer;
 
+import org.drakum.demo.registry.HandleRegistry;
+import org.drakum.demo.registry.LongId;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkBufferCreateInfo;
@@ -90,7 +92,7 @@ public class VknInternalUtils
 		return buf.get(0);
 	}
 	
-	public static long createSampler(VkDevice device, VkSamplerCreateInfo createInfo, MemoryStack stack)
+	public static LongId createSampler(VkDevice device, VkSamplerCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.mallocLong(1);
 		
@@ -99,30 +101,39 @@ public class VknInternalUtils
 			throw new Error("cannot create Sampler");
 		}
 		
-		return buf.get(0);
+		long handle = buf.get(0);
+		
+		LongId handleObj = new LongId(handle);
+		
+		return handleObj;
 	}
 	
-	public static VkMemoryRequirements getImageMemoryRequirements(VkDevice device, long image, MemoryStack stack)
+	public static VkMemoryRequirements getImageMemoryRequirements(VkDevice device, LongId image, MemoryStack stack)
 	{
 		VkMemoryRequirements memReqs = VkMemoryRequirements.malloc(stack);
-		vkGetImageMemoryRequirements(device, image, memReqs);
+		vkGetImageMemoryRequirements(device, image.handle(), memReqs);
 		
 		return memReqs;
 	}
 	
-	public static VkMemoryRequirements getImageMemoryRequirements(VkDevice device, long image)
+	public static VkMemoryRequirements getImageMemoryRequirements(VkDevice device, LongId image)
 	{
 		VkMemoryRequirements memReqs = VkMemoryRequirements.malloc();
-		vkGetImageMemoryRequirements(device, image, memReqs);
+		vkGetImageMemoryRequirements(device, image.handle(), memReqs);
 		
 		return memReqs;
 	}
 	
-	public static long createImage(VkDevice device, VkImageCreateInfo createInfo, MemoryStack stack)
+	public static LongId createImage(VkDevice device, VkImageCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer pImage = stack.mallocLong(1);
 		vkCreateImage(device, createInfo, null, pImage);
-		return pImage.get(0);
+		
+		long handle = pImage.get(0);
+		
+		LongId handleObj = new LongId(handle);
+		
+		return handleObj;
 	}
 	
 	public static int waitForFence(VkDevice device, long fence, boolean waitAll, long timeout)
@@ -360,49 +371,73 @@ public class VknInternalUtils
 		return out;
 	}
 	
-	public static long createImageView(VkDevice device, VkImageViewCreateInfo createInfo, MemoryStack stack)
+	public static LongId createImageView(VkDevice device, VkImageViewCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
 		vkCreateImageView(device, createInfo, null, buf);
 		
-		return buf.get(0);
+		long handle = buf.get(0);
+		
+		LongId handleObj = new LongId(handle);
+		
+		return handleObj;
 	}
 	
-	public static long createShaderModule(VkDevice device, VkShaderModuleCreateInfo createInfo, MemoryStack stack)
+	public static LongId createShaderModule(VkDevice device, VkShaderModuleCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
 		vkCreateShaderModule(device, createInfo, null, buf);
 		
-		return buf.get(0);
+		long handle = buf.get(0);
+		
+		LongId handleObj = new LongId(handle);
+		
+		return handleObj;
 	}
 	
-	public static long createPipelineLayout(VkDevice device, VkPipelineLayoutCreateInfo createInfo, MemoryStack stack)
+	public static LongId createPipelineLayout(VkDevice device, VkPipelineLayoutCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
 		vkCreatePipelineLayout(device, createInfo, null, buf);
 		
-		return buf.get(0);
+		long handle = buf.get(0);
+		
+		long id = HandleRegistry.registerLong(handle);
+		
+		LongId handleObj = new LongId(id);
+		
+		return handleObj;
 	}
 	
-	public static long createRenderPass(VkDevice device, VkRenderPassCreateInfo createInfo, MemoryStack stack)
+	public static LongId createRenderPass(VkDevice device, VkRenderPassCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
 		vkCreateRenderPass(device, createInfo, null, buf);
 		
-		return buf.get(0);
+		long handle = buf.get(0);
+		
+		LongId handleObj = new LongId(handle);
+		
+		return handleObj;
 	}
 	
-	public static long createGraphicsPipeline(VkDevice device, VkGraphicsPipelineCreateInfo.Buffer createInfos, MemoryStack stack)
+	public static LongId createGraphicsPipeline(VkDevice device, VkGraphicsPipelineCreateInfo.Buffer createInfos, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
 		vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, createInfos, null, buf);
 		
-		return buf.get(0);
+		long handle = buf.get(0);
+		
+		long id = HandleRegistry.registerLong(handle);
+		
+		LongId handleObj = new LongId(id);
+		
+		return handleObj;
 	}
 	
 	public static long createFramebuffer(VkDevice device, VkFramebufferCreateInfo createInfo, MemoryStack stack)
@@ -470,13 +505,13 @@ public class VknInternalUtils
 		public int code;
 	}
 	
-	public static long createBuffer(VkDevice device, VkBufferCreateInfo createInfo, MemoryStack stack)
+	public static LongId createBuffer(VkDevice device, VkBufferCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
 		vkCreateBuffer(device, createInfo, null, buf);
 		
-		return buf.get(0);
+		return new LongId(buf.get(0));
 	}
 	
 	public static long mapMemory(VkDevice device, long memory, long offset, long size, int flags, MemoryStack stack)

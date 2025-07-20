@@ -41,27 +41,27 @@ public class Model
 		
 		vertexBuffer = new VknBuffer(vertexBufferCreateSettings);
 		
-		VknStagingBuffer stagingBuffer = new VknStagingBuffer(new VknStagingBuffer.Settings(CommonRenderContext.context).size(Vertex.byteSize() * vertices.length));
-		
-		stagingBuffer.map();
-		
-		MemorySegment seg = stagingBuffer.memory();
-		
-		for(int i = 0; i < vertices.length; i++)
+		try(VknStagingBuffer stagingBuffer = new VknStagingBuffer(new VknStagingBuffer.Settings(CommonRenderContext.context).size(Vertex.byteSize() * vertices.length)))
 		{
-			Vertex vertex = vertices[i];
+			stagingBuffer.map();
 			
-			MemorySegment slice = AttribFormats.POS3_COL3_TEX2.slice(seg, i);
-
-			AttribFormats.POS3_COL3_TEX2.setPos(slice, vertex.pos.x, vertex.pos.y, vertex.pos.z);
-			AttribFormats.POS3_COL3_TEX2.setCol(slice, vertex.color.x, vertex.color.y, vertex.color.z);
-			AttribFormats.POS3_COL3_TEX2.setTex(slice, vertex.texCoord.x, vertex.texCoord.y);
-		}
+			MemorySegment seg = stagingBuffer.memory();
+			
+			for(int i = 0; i < vertices.length; i++)
+			{
+				Vertex vertex = vertices[i];
 				
-		stagingBuffer.unmap();
+				MemorySegment slice = AttribFormats.POS3_COL3_TEX2.slice(seg, i);
 
-		stagingBuffer.trasferToBuffer(this.vertexBuffer.handle());
-		stagingBuffer.close();
+				AttribFormats.POS3_COL3_TEX2.setPos(slice, vertex.pos.x, vertex.pos.y, vertex.pos.z);
+				AttribFormats.POS3_COL3_TEX2.setCol(slice, vertex.color.x, vertex.color.y, vertex.color.z);
+				AttribFormats.POS3_COL3_TEX2.setTex(slice, vertex.texCoord.x, vertex.texCoord.y);
+			}
+					
+			stagingBuffer.unmap();
+
+			stagingBuffer.trasferToBuffer(this.vertexBuffer.handle().handle());
+		}
 	}
 
 	private void createIndexBuffer(int[] indices, MemoryStack stack)
@@ -74,16 +74,11 @@ public class Model
 		
 		indexBuffer = new VknBuffer(indexBufferCreateSettings);
 
-		VknStagingBuffer stagingBuffer = new VknStagingBuffer(new VknStagingBuffer.Settings(CommonRenderContext.context).size(4 * indices.length));
-		stagingBuffer.store(indices);
-		stagingBuffer.trasferToBuffer(indexBuffer.handle());
-		stagingBuffer.close();
-	}
-	
-	public void close()
-	{
-		indexBuffer.close();
-		vertexBuffer.close();
+		try(VknStagingBuffer stagingBuffer = new VknStagingBuffer(new VknStagingBuffer.Settings(CommonRenderContext.context).size(4 * indices.length)))
+		{
+			stagingBuffer.store(indices);
+			stagingBuffer.trasferToBuffer(indexBuffer.handle().handle());
+		}
 	}
 	
 	public static class Vertex

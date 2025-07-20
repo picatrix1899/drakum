@@ -1,7 +1,5 @@
 package org.drakum.demo.vkn;
 
-import static org.lwjgl.vulkan.VK14.*;
-
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -9,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import org.drakum.demo.Engine;
+import org.drakum.demo.registry.LongId;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkShaderModuleCreateInfo;
 
@@ -16,7 +15,7 @@ public class VknShaderModule
 {
 	private final VknContext context;
 	
-	public long handle;
+	public LongId handle;
 	
 	public VknShaderModule(VknContext context, String path)
 	{
@@ -32,11 +31,6 @@ public class VknShaderModule
 
 			this.handle = VknInternalUtils.createShaderModule(this.context.gpu.handle(), vertexShaderModuleCreateInfo, stack);
 		}
-	}
-	
-	public void close()
-	{
-		vkDestroyShaderModule(this.context.gpu.handle(), handle, null);
 	}
 	
 	private static ByteBuffer readFile(String file, MemoryStack stack)

@@ -1,3 +1,4 @@
 {
-	"inflightFrames": 8
+	"inflightFrames": 8,
+	"debug": true
 }

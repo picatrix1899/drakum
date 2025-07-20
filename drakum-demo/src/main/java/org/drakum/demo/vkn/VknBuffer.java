@@ -2,6 +2,7 @@ package org.drakum.demo.vkn;
 
 import static org.lwjgl.vulkan.VK14.*;
 
+import org.drakum.demo.registry.LongId;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkBufferCreateInfo;
 import org.lwjgl.vulkan.VkMemoryRequirements;
@@ -10,8 +11,8 @@ public class VknBuffer
 {
 	private final VknContext context;
 	
-	private long handle;
-	private VknMemory memory;
+	private LongId handle;
+	public VknMemory memory;
 	
 	public VknBuffer(Settings settings)
 	{
@@ -29,22 +30,23 @@ public class VknBuffer
 			
 			VkMemoryRequirements memoryRequirements = VkMemoryRequirements.calloc(stack);
 			
-			vkGetBufferMemoryRequirements(this.context.gpu.handle(), this.handle, memoryRequirements);
+			vkGetBufferMemoryRequirements(this.context.gpu.handle(), this.handle.handle(), memoryRequirements);
 
 			this.memory = new VknMemory(new VknMemory.Settings(this.context).size(memoryRequirements.size()).memoryTypeBits(memoryRequirements.memoryTypeBits()).properties(settings.properties));
 			
-			vkBindBufferMemory(this.context.gpu.handle(), this.handle, this.memory.handle(), 0);
+			vkBindBufferMemory(this.context.gpu.handle(), this.handle.handle(), this.memory.handle().handle(), 0);
+			
 		}
 	}
 	
-	public long handle()
+	public LongId handle()
 	{
 		ensureValid();
 		
 		return this.handle;
 	}
 	
-	public long memoryHandle()
+	public LongId memoryHandle()
 	{
 		ensureValid();
 		
@@ -81,24 +83,21 @@ public class VknBuffer
 
 	public boolean isValid()
 	{
-		return this.handle != VK_NULL_HANDLE;
-	}
-	
-	public void close()
-	{
-		if(this.handle == VK_NULL_HANDLE) return;
-		
-		unmap();
-		
-		vkDestroyBuffer(this.context.gpu.handle(), this.handle, null);
-		this.memory.close();
-		
-		this.handle = VK_NULL_HANDLE;
+		return this.handle.isValid();
 	}
 
 	private void ensureValid()
 	{
 		if(VknContext.OBJECT_VALIDATION && !isValid()) throw new RuntimeException("Image object already closed.");
+	}
+	
+	public void close()
+	{
+		vkDestroyBuffer(this.context.gpu.handle(), this.handle.handle(), null);
+		
+		memory.close();
+		
+		this.handle.markInvalid();
 	}
 	
 	public static class Settings

@@ -2,6 +2,7 @@ package org.drakum.demo.vkn;
 
 import static org.lwjgl.vulkan.VK14.*;
 
+import org.drakum.demo.registry.LongId;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkMemoryAllocateInfo;
 
@@ -9,7 +10,7 @@ public class VknMemory
 {
 	private final VknContext context;
 	
-	private long handle = VK_NULL_HANDLE;
+	private LongId handle;
 	private long mappedHandle = VK_NULL_HANDLE;
 	
 	private final long size;
@@ -26,11 +27,11 @@ public class VknMemory
 			memoryAllocateInfo.allocationSize(this.size);
 			memoryAllocateInfo.memoryTypeIndex(this.context.gpu.findMemoryType(settings.memoryTypeBits, settings.properties, stack));
 
-			this.handle = VknInternalUtils.allocateMemory(this.context.gpu.handle(), memoryAllocateInfo, stack);
+			this.handle = new LongId(VknInternalUtils.allocateMemory(this.context.gpu.handle(), memoryAllocateInfo, stack));
 		}
 	}
 	
-	public long handle()
+	public LongId handle()
 	{
 		ensureValid();
 		
@@ -59,7 +60,7 @@ public class VknMemory
 		
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
-			this.mappedHandle = VknInternalUtils.mapMemory(this.context.gpu.handle(), this.handle, 0, size, 0, stack);
+			this.mappedHandle = VknInternalUtils.mapMemory(this.context.gpu.handle(), this.handle.handle(), 0, size, 0, stack);
 		}
 	}
 	
@@ -69,28 +70,26 @@ public class VknMemory
 		
 		if(this.mappedHandle == VK_NULL_HANDLE) return;
 		
-		vkUnmapMemory(this.context.gpu.handle(), this.handle);
+		vkUnmapMemory(this.context.gpu.handle(), this.handle.handle());
 		
 		this.mappedHandle = VK_NULL_HANDLE;
 	}
 	
 	public boolean isValid()
 	{
-		return this.handle != VK_NULL_HANDLE;
+		return this.handle.isValid();
+	}
+
+	private void ensureValid()
+	{
+		if(VknContext.OBJECT_VALIDATION && !isValid()) throw new RuntimeException("Image object already closed.");
 	}
 	
 	public void close()
 	{
 		unmap();
 		
-		vkFreeMemory(this.context.gpu.handle(), this.handle, null);
-		
-		this.handle = VK_NULL_HANDLE;
-	}
-
-	private void ensureValid()
-	{
-		if(VknContext.OBJECT_VALIDATION && !isValid()) throw new RuntimeException("Image object already closed.");
+		vkFreeMemory(this.context.gpu.handle(), this.handle.handle(), null);
 	}
 	
 	public static class Settings

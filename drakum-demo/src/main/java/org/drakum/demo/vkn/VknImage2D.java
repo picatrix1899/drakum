@@ -3,6 +3,7 @@ package org.drakum.demo.vkn;
 import static org.lwjgl.vulkan.VK14.*;
 
 import org.barghos.util.container.ints.Extent2I;
+import org.drakum.demo.registry.LongId;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkImageCreateInfo;
 import org.lwjgl.vulkan.VkMemoryRequirements;
@@ -11,9 +12,9 @@ public class VknImage2D implements IVknImage2D
 {
 	private final VknContext context;
 	
-	private long handle = VK_NULL_HANDLE;
+	private LongId handle;
 	
-	private VkMemoryRequirements memoryRequirements;
+	private MemoryRequirements memoryRequirements;
 	private int format;
 	private int width;
 	private int height;
@@ -43,11 +44,16 @@ public class VknImage2D implements IVknImage2D
 			
 			this.handle = VknInternalUtils.createImage(this.context.gpu.handle(), imageInfo, stack);
 
-			this.memoryRequirements = VknInternalUtils.getImageMemoryRequirements(this.context.gpu.handle(), this.handle);
+			VkMemoryRequirements memoryRequirements = VknInternalUtils.getImageMemoryRequirements(this.context.gpu.handle(), this.handle, stack);
+			
+			this.memoryRequirements = new MemoryRequirements();
+			this.memoryRequirements.size = memoryRequirements.size();
+			this.memoryRequirements.alignment = memoryRequirements.alignment();
+			this.memoryRequirements.memoryTypeBits = memoryRequirements.memoryTypeBits();
 		}
 	}
 
-	public long handle()
+	public LongId handle()
 	{
 		ensureValid();
 		
@@ -61,7 +67,7 @@ public class VknImage2D implements IVknImage2D
 		return this.format;
 	}
 	
-	public VkMemoryRequirements memoryRequirements()
+	public MemoryRequirements memoryRequirements()
 	{
 		ensureValid();
 		
@@ -72,14 +78,14 @@ public class VknImage2D implements IVknImage2D
 	{
 		ensureValid();
 		
-		return new VknMemory(new VknMemory.Settings(this.context).size(this.memoryRequirements.size()).memoryTypeBits(this.memoryRequirements.memoryTypeBits()).properties(properties));
+		return new VknMemory(new VknMemory.Settings(this.context).size(this.memoryRequirements.size).memoryTypeBits(this.memoryRequirements.memoryTypeBits).properties(properties));
 	}
 	
 	public void bindMemory(VknMemory memory, long offset)
 	{
 		ensureValid();
 		
-		vkBindImageMemory(this.context.gpu.handle(), this.handle, memory.handle(), offset);
+		vkBindImageMemory(this.context.gpu.handle(), this.handle.handle(), memory.handle().handle(), offset);
 	}
 	
 	public VknMemory allocateAndBindMemory(int properties)
@@ -115,23 +121,24 @@ public class VknImage2D implements IVknImage2D
 	
 	public boolean isValid()
 	{
-		return this.handle != VK_NULL_HANDLE;
+		return this.handle.isValid();
 	}
 	
 	public void close()
 	{
-		if(this.handle == VK_NULL_HANDLE) return;
-		
-		vkDestroyImage(this.context.gpu.handle(), this.handle, null);
-		
-		this.memoryRequirements.free();
-		
-		this.handle = VK_NULL_HANDLE;
+		vkDestroyImage(this.context.gpu.handle(), this.handle.handle(), null);
 	}
 	
 	private void ensureValid()
 	{
 		if(VknContext.OBJECT_VALIDATION && !isValid()) throw new RuntimeException("Image object already closed.");
+	}
+	
+	public static class MemoryRequirements
+	{
+		public long size;
+		public long alignment;
+		public int memoryTypeBits;
 	}
 	
 	public static class Settings

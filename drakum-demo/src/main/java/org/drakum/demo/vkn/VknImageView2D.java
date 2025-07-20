@@ -2,6 +2,7 @@ package org.drakum.demo.vkn;
 
 import static org.lwjgl.vulkan.VK14.*;
 
+import org.drakum.demo.registry.LongId;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkImageViewCreateInfo;
 
@@ -9,7 +10,7 @@ public class VknImageView2D
 {
 	private final VknContext context;
 	
-	private long handle;
+	private LongId handle;
 	private int format;
 	private int width;
 	private int height;
@@ -22,7 +23,7 @@ public class VknImageView2D
 			
 			VkImageViewCreateInfo imageViewCreateInfo = VkImageViewCreateInfo.calloc(stack);
 			imageViewCreateInfo.sType$Default();
-			imageViewCreateInfo.image(settings.image.handle());
+			imageViewCreateInfo.image(settings.image.handle().handle());
 			imageViewCreateInfo.viewType(VK_IMAGE_VIEW_TYPE_2D);
 			imageViewCreateInfo.format(settings.image.format());
 			imageViewCreateInfo.components().r(VK_COMPONENT_SWIZZLE_IDENTITY).g(VK_COMPONENT_SWIZZLE_IDENTITY).b(VK_COMPONENT_SWIZZLE_IDENTITY).a(VK_COMPONENT_SWIZZLE_IDENTITY);
@@ -32,7 +33,7 @@ public class VknImageView2D
 		}
 	}
 
-	public long handle()
+	public LongId handle()
 	{
 		ensureValid();
 		
@@ -62,16 +63,12 @@ public class VknImageView2D
 	
 	public boolean isValid()
 	{
-		return this.handle != VK_NULL_HANDLE;
+		return this.handle.isValid();
 	}
 	
 	public void close()
 	{
-		if(this.handle == VK_NULL_HANDLE) return;
-		
-		vkDestroyImageView(this.context.gpu.handle(), this.handle, null);
-		
-		this.handle = VK_NULL_HANDLE;
+		vkDestroyImageView(this.context.gpu.handle(), this.handle.handle(), null);
 	}
 	
 	private void ensureValid()

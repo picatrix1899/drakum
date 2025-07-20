@@ -7,6 +7,7 @@ import static org.lwjgl.vulkan.VK14.*;
 import java.nio.IntBuffer;
 
 import org.barghos.util.container.ints.Extent2I;
+import org.drakum.demo.registry.LongId;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkCommandBufferAllocateInfo;
@@ -184,7 +185,7 @@ public class VknSwapchain
 	
 	public void cmdPresent(VknImage2D sceneImage, MemoryStack stack)
 	{
-		new VknCmdImageMemoryBarrier(this.commandBuffers[this.currentInFlightFrame], sceneImage.handle())
+		new VknCmdImageMemoryBarrier(this.commandBuffers[this.currentInFlightFrame], sceneImage.handle().handle())
 		.layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
 		.accessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT)
 		.stageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT)
@@ -197,8 +198,8 @@ public class VknSwapchain
 		.run();
 
 		VknUtil.cmdBlitImage(
-				this.commandBuffers[this.currentInFlightFrame], sceneImage.handle(), 0, 0, 0, this.framebufferExtent.width(), this.framebufferExtent.height(), 1, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				this.swapchainImages[this.currentImageIndex].handle(), 0, 0, 0, this.framebufferExtent.width(), this.framebufferExtent.height(), 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_FILTER_LINEAR, stack);
+				this.commandBuffers[this.currentInFlightFrame], sceneImage.handle().handle(), 0, 0, 0, this.framebufferExtent.width(), this.framebufferExtent.height(), 1, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				this.swapchainImages[this.currentImageIndex].handle().handle(), 0, 0, 0, this.framebufferExtent.width(), this.framebufferExtent.height(), 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_FILTER_LINEAR, stack);
 		
 		new VknCmdImageMemoryBarrier(this.commandBuffers[this.currentInFlightFrame], this.swapchainImages[this.currentImageIndex])
 		.layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
@@ -206,7 +207,7 @@ public class VknSwapchain
 		.stageMask(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
 		.run();
 
-		new VknCmdImageMemoryBarrier(this.commandBuffers[this.currentInFlightFrame], sceneImage.handle())
+		new VknCmdImageMemoryBarrier(this.commandBuffers[this.currentInFlightFrame], sceneImage.handle().handle())
 		.layout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 		.accessMask(VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT)
 		.stageMask(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
@@ -279,7 +280,7 @@ public class VknSwapchain
 			
 			for(int i = 0; i < rawSwapchainImages.length; i++)
 			{
-				VknExternalImage2D image = new VknExternalImage2D(new VknExternalImage2D.Settings(this.context).handle(rawSwapchainImages[i]).format(this.surface.idealFormat().format).size(this.framebufferExtent));
+				VknExternalImage2D image = new VknExternalImage2D(new VknExternalImage2D.Settings(this.context).handle(new LongId(rawSwapchainImages[i])).format(this.surface.idealFormat().format).size(this.framebufferExtent));
 				swapchainImages[i] = image;
 				
 				VknImageView2D view = image.createView();

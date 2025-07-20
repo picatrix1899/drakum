@@ -5,6 +5,7 @@ import static org.lwjgl.vulkan.VK14.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.drakum.demo.registry.LongId;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkGraphicsPipelineCreateInfo;
 import org.lwjgl.vulkan.VkPipelineColorBlendAttachmentState;
@@ -27,7 +28,7 @@ public class VknPipeline
 	
 	private final long pipelineLayout;
 	
-	private long handle;
+	private LongId handle;
 	
 	public VknPipeline(Settings settings)
 	{
@@ -44,7 +45,7 @@ public class VknPipeline
 				
 				shaderStages.get(i).sType$Default();
 				shaderStages.get(i).stage(ss.stage);
-				shaderStages.get(i).module(ss.shaderModule.handle);
+				shaderStages.get(i).module(ss.shaderModule.handle.handle());
 				shaderStages.get(i).pName(stack.UTF8(ss.entryPoint));
 			}
 
@@ -125,7 +126,7 @@ public class VknPipeline
 		}
 	}
 	
-	public long handle()
+	public LongId handle()
 	{
 		ensureValid();
 		
@@ -141,17 +142,7 @@ public class VknPipeline
 	
 	public boolean isValid()
 	{
-		return this.handle != VK_NULL_HANDLE;
-	}
-	
-	public void close()
-	{
-		if(this.handle == VK_NULL_HANDLE) return;
-		
-		vkDestroyPipeline(this.context.gpu.handle(), handle, null);
-		
-		
-		this.handle = VK_NULL_HANDLE;
+		return this.handle.isValid();
 	}
 	
 	private void ensureValid()

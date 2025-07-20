@@ -38,7 +38,7 @@ public class VknCmdImageMemoryBarrier
 	public VknCmdImageMemoryBarrier(VkCommandBuffer cmdBuffer, IVknImage2D image)
 	{
 		this.cmdBuffer = cmdBuffer;
-		this.image = image.handle();
+		this.image = image.handle().handle();
 	}
 	
 	public VknCmdImageMemoryBarrier layout(int src, int dst)

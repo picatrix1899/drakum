@@ -1,20 +1,19 @@
 package org.drakum.demo;
 
 import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.vulkan.VK10.vkDestroyPipelineLayout;
 import static org.lwjgl.vulkan.VK14.*;
 
 import java.lang.foreign.ValueLayout;
 import java.nio.FloatBuffer;
 import java.nio.LongBuffer;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 
 import org.barghos.math.matrix.Mat4F;
 import org.barghos.math.quaternion.QuatF;
 import org.barghos.util.math.MathUtils;
 import org.drakum.demo.Model.Vertex;
+import org.drakum.demo.registry.LongId;
+import org.drakum.demo.registry.Registry;
 import org.drakum.demo.vkn.CommonRenderContext;
 import org.drakum.demo.vkn.GLFWContext;
 import org.drakum.demo.vkn.VknBuffer;
@@ -47,28 +46,17 @@ import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.VkClearValue;
 import org.lwjgl.vulkan.VkCommandBufferBeginInfo;
 import org.lwjgl.vulkan.VkDescriptorBufferInfo;
-import org.lwjgl.vulkan.VkDescriptorImageInfo;
 import org.lwjgl.vulkan.VkDescriptorSetAllocateInfo;
-import org.lwjgl.vulkan.VkDrawIndexedIndirectCommand;
 import org.lwjgl.vulkan.VkPipelineLayoutCreateInfo;
 import org.lwjgl.vulkan.VkRect2D;
 import org.lwjgl.vulkan.VkRenderPassBeginInfo;
-import org.lwjgl.vulkan.VkVertexInputAttributeDescription;
-import org.lwjgl.vulkan.VkVertexInputBindingDescription;
 import org.lwjgl.vulkan.VkWriteDescriptorSet;
-
-import it.unimi.dsi.fastutil.objects.Object2LongAVLTreeMap;
-import it.unimi.dsi.fastutil.objects.Object2LongMap;
-import it.unimi.dsi.fastutil.objects.Object2ObjectAVLTreeMap;
-import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 
 public class RendererMaster
 {
 	private VknRenderPass renderPass;
 	
-	private VknImage2D sceneImage;
-	private VknMemory sceneImageMemory;
-	public VknImageView2D sceneImageView;
+	public Texture sceneTexture;
 	public VknFramebuffer2D sceneFramebuffer;
 	
 	private VknSimpleDescriptorSetLayout uboDescriptorSetLayout;
@@ -101,7 +89,7 @@ public class RendererMaster
 		{
 			GLFWContext.init();
 			CommonRenderContext.context = new VknContext();
-			CommonRenderContext.context.instance = new VknInstance(new VknInstance.Settings().applicationName("Drakum Demo").engineName("Drakum").debug());
+			CommonRenderContext.context.instance = new VknInstance(new VknInstance.Settings().applicationName("Drakum Demo").engineName("Drakum").debugMode(appSettings.debug));
 			
 			VknPhysicalGPUList physicalGpuList = new VknPhysicalGPUList(new VknPhysicalGPUList.Settings(CommonRenderContext.context));
 			VknPhysicalGPU physicalGpu = physicalGpuList.physicalGpus()[0];
@@ -112,10 +100,19 @@ public class RendererMaster
 			
 			createRenderPass(stack);
 			
-			this.sceneImage = new VknImage2D(new VknImage2D.Settings(CommonRenderContext.context).size(window.framebufferExtent).usageColorAttachment().usageTransferSrc().usageSampled());
-			this.sceneImageMemory = sceneImage.allocateAndBindMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-			this.sceneImageView = this.sceneImage.createView();
-			this.sceneFramebuffer = new VknFramebuffer2D(new VknFramebuffer2D.Settings(CommonRenderContext.context).renderPass(this.renderPass).addAttachment(this.sceneImageView).size(window.framebufferExtent));
+			VknImage2D sceneImage = new VknImage2D(new VknImage2D.Settings(CommonRenderContext.context).size(window.framebufferExtent).usageColorAttachment().usageTransferSrc().usageSampled());
+			VknMemory sceneImageMemory = sceneImage.allocateAndBindMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			VknImageView2D sceneImageView = sceneImage.createView();
+			
+			this.sceneTexture = new Texture();
+			this.sceneTexture.width = window.framebufferExtent.width();
+			this.sceneTexture.height = window.framebufferExtent.height();
+			this.sceneTexture.format = sceneImage.format();
+			this.sceneTexture.texture = sceneImage;
+			this.sceneTexture.textureMemory = sceneImageMemory;
+			this.sceneTexture.textureView = sceneImageView;
+			
+			this.sceneFramebuffer = new VknFramebuffer2D(new VknFramebuffer2D.Settings(CommonRenderContext.context).renderPass(this.renderPass).addAttachment(sceneImageView).size(window.framebufferExtent));
 
 			this.uboDescriptorSetLayout = new VknSimpleDescriptorSetLayout(new VknSimpleDescriptorSetLayout.Settings(CommonRenderContext.context).type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).stageFlags(VK_SHADER_STAGE_VERTEX_BIT));
 			
@@ -129,14 +126,18 @@ public class RendererMaster
 			int[] indices = new int[] {0, 1, 2, 2, 3, 0};
 			
 			model = new Model(vertices, indices);
+			Registry.registerModel(model);
 			
 			this.vertexShaderModule = new VknShaderModule(CommonRenderContext.context, "/vert.spv");
 			this.fragmentShaderModule = new VknShaderModule(CommonRenderContext.context, "/frag.spv");
+			Registry.registerShaderModule(vertexShaderModule);
+			Registry.registerShaderModule(fragmentShaderModule);
 			
 			uboDescriptorPool = new VknSimpleDescriptorPool(new VknSimpleDescriptorPool.Settings(CommonRenderContext.context).type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).descriptorCount(1).setCount(window.inFlightFrameCount));
 			textureDescriptorPool = new VknSimpleDescriptorPool(new VknSimpleDescriptorPool.Settings(CommonRenderContext.context).type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(1).setCount(1));
 			
-			Texture texture = new Texture("/texture.png");
+			Texture texture = TextureLoader.createTexture("/texture.png");
+			Registry.registerTexture(texture);
 			
 			VknSampler.Settings samplerSettings = new VknSampler.Settings(CommonRenderContext.context);
 			samplerSettings.anisotropy = 16.0f;
@@ -147,6 +148,7 @@ public class RendererMaster
 			this.material.textures.put(MaterialType.TEXTURE_ALBEDO, texture);
 			this.material.samplers.put(MaterialType.TEXTURE_ALBEDO, textureSampler);
 			this.material.type = MaterialType.FLAT_ALBEDO;
+			Registry.registerMaterial(material);
 			
 			texturedModel = new TexturedModel();
 			texturedModel.model = model;
@@ -181,19 +183,17 @@ public class RendererMaster
 			pipelineLayoutCreateInfo.pSetLayouts(stack.longs(pipelineDescriptorLayouts));
 			pipelineLayoutCreateInfo.setLayoutCount(pipelineDescriptorLayouts.length);
 			
-			long pipelineLayout = VknInternalUtils.createPipelineLayout(CommonRenderContext.context.gpu.handle(), pipelineLayoutCreateInfo, stack);
+			LongId pipelineLayout = VknInternalUtils.createPipelineLayout(CommonRenderContext.context.gpu.handle(), pipelineLayoutCreateInfo, stack);
 			
 			VknPipeline.Settings pipelineCreateSettings = new VknPipeline.Settings(CommonRenderContext.context);
-			pipelineCreateSettings.pipelineLayout = pipelineLayout;
-			pipelineCreateSettings.renderPass = renderPass.handle();
+			pipelineCreateSettings.pipelineLayout = pipelineLayout.getLongHandle();
+			pipelineCreateSettings.renderPass = renderPass.handle().handle();
 			pipelineCreateSettings.bindingDescriptions = attribFormat.genBindingDescription(0, stack);
 			pipelineCreateSettings.attributeDescriptions = attribFormat.genAttribDescription(0, stack);
 			pipelineCreateSettings.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertexShader);
 			pipelineCreateSettings.addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader);
 			
-			VknPipeline graphicsPipeline = new VknPipeline(pipelineCreateSettings);
-			
-			Registry.registerPipeline(attribFormat, materialType, graphicsPipeline);
+			Registry.createPipeline(attribFormat, materialType, pipelineCreateSettings);
 		}
 	}
 	
@@ -212,7 +212,7 @@ public class RendererMaster
 		for(int i = 0; i < window.inFlightFrameCount; i++)
 		{
 			VkDescriptorBufferInfo.Buffer descriptorBufferInfo = VkDescriptorBufferInfo.calloc(1, stack);
-			descriptorBufferInfo.buffer(uniformBuffers[i].handle());
+			descriptorBufferInfo.buffer(uniformBuffers[i].handle().handle());
 			descriptorBufferInfo.offset(0);
 			descriptorBufferInfo.range(UBO.byteSize());
 
@@ -255,6 +255,8 @@ public class RendererMaster
 		renderPassCreateSettings.dependencies.add(subpassDependency);
 		
 		renderPass = new VknRenderPass(renderPassCreateSettings);
+		
+		Registry.registerRenderPass(renderPass);
 	}
 	
 	private void initUniformBuffers(MemoryStack stack)
@@ -274,6 +276,8 @@ public class RendererMaster
 			buffer.map();
 
 			uniformBuffers[i] = buffer;
+			
+			Registry.registerBuffer(buffer);
 		}
 	}
 
@@ -359,7 +363,7 @@ public class RendererMaster
 			VkClearValue.Buffer clearColor = VkClearValue.calloc(1, stack);
 			clearColor.color().float32(0, 1.0f).float32(1, 1.0f).float32(2, 0.0f).float32(3, 1.0f);
 
-			new VknCmdImageMemoryBarrier(window.swapchain.currentCmdBuffer(), sceneImage.handle())
+			new VknCmdImageMemoryBarrier(window.swapchain.currentCmdBuffer(), sceneTexture.texture.handle().handle())
 			.layout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
 			.accessMask(0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
 			.stageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
@@ -367,7 +371,7 @@ public class RendererMaster
 			
 			VkRenderPassBeginInfo renderPassBeginInfo = VkRenderPassBeginInfo.calloc(stack);
 			renderPassBeginInfo.sType$Default();
-			renderPassBeginInfo.renderPass(renderPass.handle());
+			renderPassBeginInfo.renderPass(renderPass.handle().handle());
 			renderPassBeginInfo.framebuffer(sceneFramebuffer.handle());
 			renderPassBeginInfo.renderArea(renderArea);
 			renderPassBeginInfo.clearValueCount(1);
@@ -379,7 +383,7 @@ public class RendererMaster
 
 			vkCmdEndRenderPass(window.swapchain.currentCmdBuffer());
 			
-			window.swapchain.cmdPresent(sceneImage, stack);
+			window.swapchain.cmdPresent(sceneTexture.texture, stack);
 			
 			vkEndCommandBuffer(window.swapchain.currentCmdBuffer());
 		}
@@ -401,12 +405,12 @@ public class RendererMaster
 		
 		VknUtil.cmdSetScissor(window.swapchain.currentCmdBuffer(), 0, 0, window.framebufferExtent.width(), window.framebufferExtent.height(), stack);
 		
-		LongBuffer vertexBuffers = stack.longs(model.model.vertexBuffer.handle());
+		LongBuffer vertexBuffers = stack.longs(model.model.vertexBuffer.handle().handle());
 		LongBuffer offsets = stack.longs(0);
 		
 		vkCmdBindVertexBuffers(window.swapchain.currentCmdBuffer(), 0, vertexBuffers, offsets);
 		
-		vkCmdBindIndexBuffer(window.swapchain.currentCmdBuffer(), model.model.indexBuffer.handle(), 0, VK_INDEX_TYPE_UINT32);
+		vkCmdBindIndexBuffer(window.swapchain.currentCmdBuffer(), model.model.indexBuffer.handle().handle(), 0, VK_INDEX_TYPE_UINT32);
 		
 		vkCmdBindDescriptorSets(window.swapchain.currentCmdBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layoutHandle, 0, stack.longs(descriptorSets[window.swapchain.currentInFlightFrame()], model.material.type.getDescSet(this.textureDescriptorPool.handle(), model.material)), null);
 		
@@ -416,37 +420,22 @@ public class RendererMaster
 	public void close()
 	{
 		vkDeviceWaitIdle(CommonRenderContext.context.gpu.handle());
-
-		this.material.close();
-		
-		model.close();
-		renderPass.close();
-		
-		this.vertexShaderModule.close();
-		this.fragmentShaderModule.close();
-		
-		for (int i = 0; i < uniformBuffers.length; i++)
-		{
-			uniformBuffers[i].close();
-		}
 		
 		this.sceneFramebuffer.close();
-		this.sceneImageView.close();
-		this.sceneImage.close();
-		this.sceneImageMemory.close();
+		this.sceneTexture.close();
 		
 		this.uboDescriptorPool.close();
 		this.textureDescriptorPool.close();
 		
 		this.uboDescriptorSetLayout.close();
 
+		Registry.close();
+		
 		CommonRenderContext.context.commandPool.close();
 		
-		this.window.close();
-
 		MaterialType.closeAll();
 
-		Registry.close();
+		this.window.close();
 		
 		CommonRenderContext.context.gpu.close();
 		CommonRenderContext.context.instance.close();

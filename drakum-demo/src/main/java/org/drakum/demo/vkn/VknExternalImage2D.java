@@ -3,12 +3,13 @@ package org.drakum.demo.vkn;
 import static org.lwjgl.vulkan.VK14.*;
 
 import org.barghos.util.container.ints.Extent2I;
+import org.drakum.demo.registry.LongId;
 
 public class VknExternalImage2D implements IVknImage2D
 {
 	private final VknContext context;
 	
-	private long handle = VK_NULL_HANDLE;
+	private LongId handle;
 	
 	private int format;
 	private int width;
@@ -24,7 +25,7 @@ public class VknExternalImage2D implements IVknImage2D
 		this.height = settings.height;
 	}
 
-	public long handle()
+	public LongId handle()
 	{
 		ensureValid();
 		
@@ -61,12 +62,12 @@ public class VknExternalImage2D implements IVknImage2D
 	
 	public boolean isValid()
 	{
-		return this.handle != VK_NULL_HANDLE;
+		return this.handle.isValid();
 	}
 	
 	public void close()
 	{
-		this.handle = VK_NULL_HANDLE;
+		this.handle = null;
 	}
 	
 	private void ensureValid()
@@ -78,7 +79,7 @@ public class VknExternalImage2D implements IVknImage2D
 	{
 		private final VknContext context;
 		
-		private long handle;
+		private LongId handle;
 		private int width;
 		private int height;
 		private int format = VK_FORMAT_B8G8R8A8_SRGB;
@@ -93,14 +94,14 @@ public class VknExternalImage2D implements IVknImage2D
 			return this.context;
 		}
 		
-		public Settings handle(long handle)
+		public Settings handle(LongId handle)
 		{
 			this.handle = handle;
 			
 			return this;
 		}
 		
-		public long handle()
+		public LongId handle()
 		{
 			return this.handle;
 		}

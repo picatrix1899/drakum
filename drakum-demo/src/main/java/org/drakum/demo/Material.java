@@ -13,19 +13,4 @@ public class Material
 	public long descSet;
 	
 	public MaterialType type;
-	
-	public void close()
-	{
-		for(Texture t : textures.values())
-		{
-			t.close();
-		}
-		
-		for(VknSampler s : samplers.values())
-		{
-			s.close();
-		}
-		
-		
-	}
 }

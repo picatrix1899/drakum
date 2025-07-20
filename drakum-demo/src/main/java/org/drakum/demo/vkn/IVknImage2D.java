@@ -1,8 +1,10 @@
 package org.drakum.demo.vkn;
 
+import org.drakum.demo.registry.LongId;
+
 public interface IVknImage2D
 {
-	long handle();
+	LongId handle();
 	
 	int width();
 	int height();

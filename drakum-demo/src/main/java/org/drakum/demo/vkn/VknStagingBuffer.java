@@ -18,7 +18,7 @@ import org.lwjgl.vulkan.VkCommandBufferAllocateInfo;
 import org.lwjgl.vulkan.VkCommandBufferBeginInfo;
 import org.lwjgl.vulkan.VkSubmitInfo;
 
-public class VknStagingBuffer
+public class VknStagingBuffer implements AutoCloseable
 {
 	private final VknContext context;
 	
@@ -222,7 +222,7 @@ public class VknStagingBuffer
 			bufferImageCopy.imageOffset().set(0, 0, 0);
 			bufferImageCopy.imageExtent().set(width, height, depth);
 			
-			vkCmdCopyBufferToImage(cmdBuffer, buffer.handle(), image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, bufferImageCopy);
+			vkCmdCopyBufferToImage(cmdBuffer, buffer.handle().handle(), image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, bufferImageCopy);
 			
 			new VknCmdImageMemoryBarrier(cmdBuffer, image)
 			.layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, finalLayout)
@@ -259,7 +259,7 @@ public class VknStagingBuffer
 			bufferCopy.dstOffset(0);
 			bufferCopy.size(size);
 			
-			vkCmdCopyBuffer(cmdBuffer, this.buffer.handle(), buffer, bufferCopy);
+			vkCmdCopyBuffer(cmdBuffer, this.buffer.handle().handle(), buffer, bufferCopy);
 			
 			vkEndCommandBuffer(cmdBuffer);
 			
@@ -286,7 +286,11 @@ public class VknStagingBuffer
 		{
 			vkFreeCommandBuffers(this.context.gpu.handle(), this.context.commandPool.handle(), stack.pointers(cmdBuffer));
 			
-			buffer.close();
+			vkDestroyBuffer(this.context.gpu.handle(), this.buffer.handle().handle(), null);
+			
+			if(buffer.memory.isMapped()) vkUnmapMemory(this.context.gpu.handle(), this.buffer.memoryHandle().handle());
+			
+			vkFreeMemory(this.context.gpu.handle(), this.buffer.memoryHandle().handle(), null);
 		}
 	}
 	

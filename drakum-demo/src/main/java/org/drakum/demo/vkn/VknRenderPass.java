@@ -5,6 +5,7 @@ import static org.lwjgl.vulkan.VK14.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.drakum.demo.registry.LongId;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkAttachmentDescription;
 import org.lwjgl.vulkan.VkAttachmentReference;
@@ -19,7 +20,7 @@ public class VknRenderPass
 {
 	private final VknContext context;
 	
-	private long handle;
+	private LongId handle;
 	
 	public VknRenderPass(Settings settings)
 	{
@@ -117,30 +118,19 @@ public class VknRenderPass
 		}
 	}
 	
-	public long handle()
+	public LongId handle()
 	{
-		ensureValid();
-		
 		return this.handle;
 	}
 	
 	public boolean isValid()
 	{
-		return this.handle != VK_NULL_HANDLE;
+		return this.handle.isValid();
 	}
 	
 	public void close()
 	{
-		if(this.handle == VK_NULL_HANDLE) return;
-		
-		vkDestroyRenderPass(this.context.gpu.handle(), this.handle, null);
-
-		this.handle = VK_NULL_HANDLE;
-	}
-	
-	private void ensureValid()
-	{
-		if(VknContext.OBJECT_VALIDATION && !isValid()) throw new RuntimeException("Image object already closed.");
+		vkDestroyRenderPass(this.context.gpu.handle(), this.handle.handle(), null);
 	}
 	
 	public static class Settings

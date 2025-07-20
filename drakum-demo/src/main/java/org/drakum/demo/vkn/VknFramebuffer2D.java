@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.barghos.util.container.ints.Extent2I;
+import org.drakum.demo.VknObjectType;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkFramebufferCreateInfo;
 
@@ -32,12 +33,12 @@ public class VknFramebuffer2D
 			LongBuffer attachmentBuffer = stack.callocLong(attachmentCount);
 			for(int i = 0; i < attachmentCount; i++)
 			{
-				attachmentBuffer.put(i, settings.attachments.get(i).handle());
+				attachmentBuffer.put(i, settings.attachments.get(i).handle().handle());
 			}
 			
 			VkFramebufferCreateInfo framebufferCreateInfo = VkFramebufferCreateInfo.calloc(stack);
 			framebufferCreateInfo.sType$Default();
-			framebufferCreateInfo.renderPass(settings.renderPass.handle());
+			framebufferCreateInfo.renderPass(settings.renderPass.handle().handle());
 			framebufferCreateInfo.attachmentCount(attachmentCount);
 			framebufferCreateInfo.pAttachments(attachmentBuffer);
 			framebufferCreateInfo.width(settings.width);
@@ -50,21 +51,21 @@ public class VknFramebuffer2D
 	
 	public long handle()
 	{
-		ensureValid();
+		ensureValid(null);
 		
 		return this.handle;
 	}
 	
 	public int width()
 	{
-		ensureValid();
+		ensureValid(null);
 		
 		return this.width;
 	}
 	
 	public int height()
 	{
-		ensureValid();
+		ensureValid(null);
 		
 		return this.height;
 	}
@@ -83,7 +84,7 @@ public class VknFramebuffer2D
 		this.handle = VK_NULL_HANDLE;
 	}
 	
-	private void ensureValid()
+	private void ensureValid(VknObjectType type)
 	{
 		if(VknContext.OBJECT_VALIDATION && !isValid()) throw new RuntimeException("Fence object already closed.");
 	}

@@ -2,6 +2,7 @@ package org.drakum.demo.vkn;
 
 import static org.lwjgl.vulkan.VK14.*;
 
+import org.drakum.demo.registry.LongId;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkSamplerCreateInfo;
 
@@ -9,7 +10,7 @@ public class VknSampler
 {
 	private final VknContext context;
 	
-	private long handle = VK_NULL_HANDLE;
+	private LongId handle;
 	
 	public VknSampler(Settings settings)
 	{
@@ -38,7 +39,7 @@ public class VknSampler
 		}
 	}
 	
-	public long handle()
+	public LongId handle()
 	{
 		ensureValid();
 		
@@ -47,16 +48,7 @@ public class VknSampler
 	
 	public boolean isValid()
 	{
-		return this.handle != VK_NULL_HANDLE;
-	}
-	
-	public void close()
-	{
-		if(this.handle == VK_NULL_HANDLE) return;
-		
-		vkDestroySampler(this.context.gpu.handle(), this.handle, null);
-
-		this.handle = VK_NULL_HANDLE;
+		return this.handle.isValid();
 	}
 	
 	private void ensureValid()
