@@ -2,6 +2,7 @@ package org.drakum.demo.vkn;
 
 import static org.lwjgl.vulkan.VK14.*;
 
+import org.drakum.demo.registry.HandleRegistry;
 import org.drakum.demo.registry.LongId;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkBufferCreateInfo;
@@ -26,15 +27,17 @@ public class VknBuffer
 			bufferCreateInfo.usage(settings.usage);
 			bufferCreateInfo.sharingMode(settings.sharingMode);
 			
-			this.handle = VknInternalUtils.createBuffer(this.context.gpu.handle(), bufferCreateInfo, stack);
+			this.handle = VknInternalUtils.createBuffer(this.context, bufferCreateInfo, stack);
 			
 			VkMemoryRequirements memoryRequirements = VkMemoryRequirements.calloc(stack);
 			
-			vkGetBufferMemoryRequirements(this.context.gpu.handle(), this.handle.handle(), memoryRequirements);
+			long bufferHandle = HandleRegistry.BUFFER.get(handle);
+			
+			vkGetBufferMemoryRequirements(this.context.gpu.handle(), bufferHandle, memoryRequirements);
 
 			this.memory = new VknMemory(new VknMemory.Settings(this.context).size(memoryRequirements.size()).memoryTypeBits(memoryRequirements.memoryTypeBits()).properties(settings.properties));
 			
-			vkBindBufferMemory(this.context.gpu.handle(), this.handle.handle(), this.memory.handle().handle(), 0);
+			vkBindBufferMemory(this.context.gpu.handle(), bufferHandle, this.memory.handle().handle(), 0);
 			
 		}
 	}
@@ -93,7 +96,7 @@ public class VknBuffer
 	
 	public void close()
 	{
-		vkDestroyBuffer(this.context.gpu.handle(), this.handle.handle(), null);
+		VknInternalUtils.destroyBuffer(context, this.handle);
 		
 		memory.close();
 		

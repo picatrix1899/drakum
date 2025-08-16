@@ -24,7 +24,7 @@ public class VknFence
 			fenceCreateInfo.sType$Default();
 			fenceCreateInfo.flags(flags);
 			
-			this.handle = VknInternalUtils.createFence(this.context.gpu.handle(), fenceCreateInfo, stack);
+			this.handle = VknInternalUtils.createFence(this.context, fenceCreateInfo, stack);
 		}
 	}
 
@@ -39,14 +39,14 @@ public class VknFence
 	{
 		ensureValid();
 		
-		VknInternalUtils.waitForFence(this.context.gpu.handle(), this.handle, true, Long.MAX_VALUE);
+		VknInternalUtils.waitForFence(this.context, this.handle, true, Long.MAX_VALUE);
 	}
 	
 	public void waitFor(long timeout)
 	{
 		ensureValid();
 		
-		VknInternalUtils.waitForFence(this.context.gpu.handle(), this.handle, true, timeout);
+		VknInternalUtils.waitForFence(this.context, this.handle, true, timeout);
 	}
 	
 	public void reset()
@@ -94,7 +94,7 @@ public class VknFence
 				fenceHandles[i] = fence.handle();
 			}
 				
-			VknInternalUtils.waitForFences(context.gpu.handle(), fenceHandles, true, Long.MAX_VALUE, stack);
+			VknInternalUtils.waitForFences(context, fenceHandles, true, Long.MAX_VALUE, stack);
 		}
 	}
 	
@@ -117,7 +117,7 @@ public class VknFence
 				fenceHandles[i] = fence.handle();
 			}
 				
-			VknInternalUtils.waitForFences(context.gpu.handle(), fenceHandles, true, timeout, stack);
+			VknInternalUtils.waitForFences(context, fenceHandles, true, timeout, stack);
 		}
 	}
 	
@@ -140,7 +140,7 @@ public class VknFence
 				fenceHandles[i] = fence.handle();
 			}
 				
-			VknInternalUtils.waitForFences(context.gpu.handle(), fenceHandles, false, Long.MAX_VALUE, stack);
+			VknInternalUtils.waitForFences(context, fenceHandles, false, Long.MAX_VALUE, stack);
 		}
 	}
 	
@@ -163,7 +163,7 @@ public class VknFence
 				fenceHandles[i] = fence.handle();
 			}
 				
-			VknInternalUtils.waitForFences(context.gpu.handle(), fenceHandles, false, timeout, stack);
+			VknInternalUtils.waitForFences(context, fenceHandles, false, timeout, stack);
 		}
 	}
 	

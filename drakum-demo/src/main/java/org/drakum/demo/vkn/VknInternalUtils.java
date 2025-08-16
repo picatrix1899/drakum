@@ -6,6 +6,9 @@ import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.KHRGetSurfaceCapabilities2.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK10.vkAllocateDescriptorSets;
+import static org.lwjgl.vulkan.VK10.vkDestroyBuffer;
+import static org.lwjgl.vulkan.VK10.vkDestroyPipelineLayout;
+import static org.lwjgl.vulkan.VK10.vkDestroyRenderPass;
 import static org.lwjgl.vulkan.VK14.*;
 
 import java.nio.IntBuffer;
@@ -52,11 +55,11 @@ import org.lwjgl.vulkan.VkSwapchainCreateInfoKHR;
 
 public class VknInternalUtils
 {
-	public static long[] allocateDescriptorSets(VkDevice device, VkDescriptorSetAllocateInfo allocateInfo, int count, MemoryStack stack)
+	public static long[] allocateDescriptorSets(VknContext context, VkDescriptorSetAllocateInfo allocateInfo, int count, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(count);
 		
-		vkAllocateDescriptorSets(CommonRenderContext.context.gpu.handle(), allocateInfo, buf);
+		vkAllocateDescriptorSets(context.gpu.handle(), allocateInfo, buf);
 		
 		long[] result = new long[count];
 		
@@ -65,25 +68,25 @@ public class VknInternalUtils
 		return result;
 	}
 	
-	public static long allocateDescriptorSet(VkDevice device, VkDescriptorSetAllocateInfo allocateInfo, MemoryStack stack)
+	public static long allocateDescriptorSet(VknContext context, VkDescriptorSetAllocateInfo allocateInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkAllocateDescriptorSets(CommonRenderContext.context.gpu.handle(), allocateInfo, buf);
+		vkAllocateDescriptorSets(context.gpu.handle(), allocateInfo, buf);
 		
 		return buf.get(0);
 	}
 	
-	public static long createDescriptorSetLayout(VkDevice device, VkDescriptorSetLayoutCreateInfo createInfo, MemoryStack stack)
+	public static long createDescriptorSetLayout(VknContext context, VkDescriptorSetLayoutCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateDescriptorSetLayout(device, createInfo, null, buf);
+		vkCreateDescriptorSetLayout(context.gpu.handle(), createInfo, null, buf);
 		
 		return buf.get(0);
 	}
 	
-	public static long createDescriptorPool(VkDevice device, VkDescriptorPoolCreateInfo createInfo, MemoryStack stack)
+	public static long createDescriptorPool(VknContext context, VkDescriptorPoolCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
@@ -92,11 +95,11 @@ public class VknInternalUtils
 		return buf.get(0);
 	}
 	
-	public static LongId createSampler(VkDevice device, VkSamplerCreateInfo createInfo, MemoryStack stack)
+	public static LongId createSampler(VknContext context, VkSamplerCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.mallocLong(1);
 		
-		if (vkCreateSampler(device, createInfo, null, buf) != VK_SUCCESS)
+		if (vkCreateSampler(context.gpu.handle(), createInfo, null, buf) != VK_SUCCESS)
 		{
 			throw new Error("cannot create Sampler");
 		}
@@ -108,26 +111,26 @@ public class VknInternalUtils
 		return handleObj;
 	}
 	
-	public static VkMemoryRequirements getImageMemoryRequirements(VkDevice device, LongId image, MemoryStack stack)
+	public static VkMemoryRequirements getImageMemoryRequirements(VknContext context, LongId image, MemoryStack stack)
 	{
 		VkMemoryRequirements memReqs = VkMemoryRequirements.malloc(stack);
-		vkGetImageMemoryRequirements(device, image.handle(), memReqs);
+		vkGetImageMemoryRequirements(context.gpu.handle(), image.handle(), memReqs);
 		
 		return memReqs;
 	}
 	
-	public static VkMemoryRequirements getImageMemoryRequirements(VkDevice device, LongId image)
+	public static VkMemoryRequirements getImageMemoryRequirements(VknContext context, LongId image)
 	{
 		VkMemoryRequirements memReqs = VkMemoryRequirements.malloc();
-		vkGetImageMemoryRequirements(device, image.handle(), memReqs);
+		vkGetImageMemoryRequirements(context.gpu.handle(), image.handle(), memReqs);
 		
 		return memReqs;
 	}
 	
-	public static LongId createImage(VkDevice device, VkImageCreateInfo createInfo, MemoryStack stack)
+	public static LongId createImage(VknContext context, VkImageCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer pImage = stack.mallocLong(1);
-		vkCreateImage(device, createInfo, null, pImage);
+		vkCreateImage(context.gpu.handle(), createInfo, null, pImage);
 		
 		long handle = pImage.get(0);
 		
@@ -136,16 +139,16 @@ public class VknInternalUtils
 		return handleObj;
 	}
 	
-	public static int waitForFence(VkDevice device, long fence, boolean waitAll, long timeout)
+	public static int waitForFence(VknContext context, long fence, boolean waitAll, long timeout)
 	{
-		return vkWaitForFences(device, fence, waitAll, timeout);
+		return vkWaitForFences(context.gpu.handle(), fence, waitAll, timeout);
 	}
 	
-	public static int waitForFences(VkDevice device, long[] fences, boolean waitAll, long timeout, MemoryStack stack)
+	public static int waitForFences(VknContext context, long[] fences, boolean waitAll, long timeout, MemoryStack stack)
 	{
 		LongBuffer buf = stack.longs(fences);
 		
-		return vkWaitForFences(device, buf, waitAll, timeout);
+		return vkWaitForFences(context.gpu.handle(), buf, waitAll, timeout);
 	}
 	
 	public static VknSurfaceFormat[] getPhysicalDeviceSurfaceFormats(VkPhysicalDevice physicalDevice, long surface, MemoryStack stack)
@@ -223,22 +226,22 @@ public class VknInternalUtils
 		return new VkInstance(buf.get(0), createInfo);
 	}
 	
-	public static VknPhysicalGPU[] enumeratePhysicalDevices(VkInstance vkInstance, MemoryStack stack)
+	public static VknPhysicalGPU[] enumeratePhysicalDevices(VknContext context, MemoryStack stack)
 	{
 		IntBuffer countBuf = stack.mallocInt(1);
 		
-		vkEnumeratePhysicalDevices(vkInstance, countBuf, null);
+		vkEnumeratePhysicalDevices(context.instance.handle(), countBuf, null);
 		
 		int count = countBuf.get(0);
 		
 		PointerBuffer buf = stack.mallocPointer(count);
 		
-		vkEnumeratePhysicalDevices(vkInstance, countBuf, buf);
+		vkEnumeratePhysicalDevices(context.instance.handle(), countBuf, buf);
 
 		VknPhysicalGPU[] out = new VknPhysicalGPU[count];
 		for(int i = 0; i < count; i++)
 		{
-			out[i] = new VknPhysicalGPU(new VkPhysicalDevice(buf.get(i), vkInstance));
+			out[i] = new VknPhysicalGPU(new VkPhysicalDevice(buf.get(i), context.instance.handle()));
 		}
 		
 		return out;
@@ -294,11 +297,11 @@ public class VknInternalUtils
 		return buf.get(0) == VK_TRUE;
 	}
 	
-	public static long createWindowSurface(VkInstance vkInstance, long window, MemoryStack stack)
+	public static long createWindowSurface(VknContext context, long window, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
-		if(glfwCreateWindowSurface(vkInstance, window, null, buf) != VK_SUCCESS)
+		if(glfwCreateWindowSurface(context.instance.handle(), window, null, buf) != VK_SUCCESS)
 		{
 			throw new Error("Cannot create Surface");
 		}
@@ -315,11 +318,11 @@ public class VknInternalUtils
 		return new VkQueue(buf.get(0), device);
 	}
 	
-	public static long createSwapchain(VkDevice device, VkSwapchainCreateInfoKHR createInfo, MemoryStack stack)
+	public static long createSwapchain(VknContext context, VkSwapchainCreateInfoKHR createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateSwapchainKHR(device, createInfo, null, buf);
+		vkCreateSwapchainKHR(context.gpu.handle(), createInfo, null, buf);
 		
 		return buf.get(0);
 	}
@@ -351,15 +354,15 @@ public class VknInternalUtils
 		return extent;
 	}
 	
-	public static long[] getSwapchainImages(VkDevice device, long swapchain, MemoryStack stack)
+	public static long[] getSwapchainImages(VknContext context, long swapchain, MemoryStack stack)
 	{
 		IntBuffer count = stack.callocInt(1);
 		
-		vkGetSwapchainImagesKHR(device, swapchain, count, null);
+		vkGetSwapchainImagesKHR(context.gpu.handle(), swapchain, count, null);
 		
 		LongBuffer buf = stack.callocLong(count.get(0));
 		
-		vkGetSwapchainImagesKHR(device, swapchain, count, buf);
+		vkGetSwapchainImagesKHR(context.gpu.handle(), swapchain, count, buf);
 		
 		long[] out = new long[count.get(0)];
 		
@@ -371,11 +374,11 @@ public class VknInternalUtils
 		return out;
 	}
 	
-	public static LongId createImageView(VkDevice device, VkImageViewCreateInfo createInfo, MemoryStack stack)
+	public static LongId createImageView(VknContext context, VkImageViewCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateImageView(device, createInfo, null, buf);
+		vkCreateImageView(context.gpu.handle(), createInfo, null, buf);
 		
 		long handle = buf.get(0);
 		
@@ -384,11 +387,11 @@ public class VknInternalUtils
 		return handleObj;
 	}
 	
-	public static LongId createShaderModule(VkDevice device, VkShaderModuleCreateInfo createInfo, MemoryStack stack)
+	public static LongId createShaderModule(VknContext context, VkShaderModuleCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateShaderModule(device, createInfo, null, buf);
+		vkCreateShaderModule(context.gpu.handle(), createInfo, null, buf);
 		
 		long handle = buf.get(0);
 		
@@ -397,99 +400,87 @@ public class VknInternalUtils
 		return handleObj;
 	}
 	
-	public static LongId createPipelineLayout(VkDevice device, VkPipelineLayoutCreateInfo createInfo, MemoryStack stack)
+	public static LongId createPipelineLayout(VknContext context, VkPipelineLayoutCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreatePipelineLayout(device, createInfo, null, buf);
+		vkCreatePipelineLayout(context.gpu.handle(), createInfo, null, buf);
 		
 		long handle = buf.get(0);
 		
-		long id = HandleRegistry.registerLong(handle);
-		
-		LongId handleObj = new LongId(id);
-		
-		return handleObj;
+		return HandleRegistry.PIPELINE_LAYOUT.register(handle);
 	}
 	
-	public static LongId createRenderPass(VkDevice device, VkRenderPassCreateInfo createInfo, MemoryStack stack)
+	public static LongId createRenderPass(VknContext context, VkRenderPassCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateRenderPass(device, createInfo, null, buf);
+		vkCreateRenderPass(context.gpu.handle(), createInfo, null, buf);
+		
+		return HandleRegistry.RENDERPASS.register(buf.get(0));
+	}
+	
+	public static LongId createGraphicsPipeline(VknContext context, VkGraphicsPipelineCreateInfo.Buffer createInfos, MemoryStack stack)
+	{
+		LongBuffer buf = stack.callocLong(1);
+		
+		vkCreateGraphicsPipelines(context.gpu.handle(), VK_NULL_HANDLE, createInfos, null, buf);
 		
 		long handle = buf.get(0);
 		
-		LongId handleObj = new LongId(handle);
-		
-		return handleObj;
+		return HandleRegistry.PIPELINE.register(handle);
 	}
 	
-	public static LongId createGraphicsPipeline(VkDevice device, VkGraphicsPipelineCreateInfo.Buffer createInfos, MemoryStack stack)
+	public static long createFramebuffer(VknContext context, VkFramebufferCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, createInfos, null, buf);
-		
-		long handle = buf.get(0);
-		
-		long id = HandleRegistry.registerLong(handle);
-		
-		LongId handleObj = new LongId(id);
-		
-		return handleObj;
-	}
-	
-	public static long createFramebuffer(VkDevice device, VkFramebufferCreateInfo createInfo, MemoryStack stack)
-	{
-		LongBuffer buf = stack.callocLong(1);
-		
-		vkCreateFramebuffer(device, createInfo, null, buf);
+		vkCreateFramebuffer(context.gpu.handle(), createInfo, null, buf);
 		
 		return buf.get(0);
 	}
 	
-	public static long createCommandPool(VkDevice device, VkCommandPoolCreateInfo createInfo, MemoryStack stack)
+	public static long createCommandPool(VknContext context, VkCommandPoolCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateCommandPool(device, createInfo, null, buf);
+		vkCreateCommandPool(context.gpu.handle(), createInfo, null, buf);
 		
 		return buf.get(0);
 	}
 	
-	public static VkCommandBuffer allocateCommandBuffer(VkDevice device, VkCommandBufferAllocateInfo allocateInfo, MemoryStack stack)
+	public static VkCommandBuffer allocateCommandBuffer(VknContext context, VkCommandBufferAllocateInfo allocateInfo, MemoryStack stack)
 	{
 		PointerBuffer buf = stack.callocPointer(1);
 		
-		vkAllocateCommandBuffers(device, allocateInfo, buf);
+		vkAllocateCommandBuffers(context.gpu.handle(), allocateInfo, buf);
 		
-		return new VkCommandBuffer(buf.get(0), device);
+		return new VkCommandBuffer(buf.get(0), context.gpu.handle());
 	}
 	
-	public static long createSemaphore(VkDevice device, VkSemaphoreCreateInfo createInfo, MemoryStack stack)
+	public static long createSemaphore(VknContext context, VkSemaphoreCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateSemaphore(device, createInfo, null, buf);
+		vkCreateSemaphore(context.gpu.handle(), createInfo, null, buf);
 		
 		return buf.get(0);
 	}
 	
-	public static long createFence(VkDevice device, VkFenceCreateInfo createInfo, MemoryStack stack)
+	public static long createFence(VknContext context, VkFenceCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateFence(device, createInfo, null, buf);
+		vkCreateFence(context.gpu.handle(), createInfo, null, buf);
 		
 		return buf.get(0);
 	}
 	
-	public static IntResult acquireNextImage(VkDevice device, long swapchain, long semaphore, MemoryStack stack)
+	public static IntResult acquireNextImage(VknContext context, long swapchain, long semaphore, MemoryStack stack)
 	{
 		IntBuffer buf = stack.callocInt(1);
 		
-		int code = vkAcquireNextImageKHR(device, swapchain, Long.MAX_VALUE, semaphore, VK_NULL_HANDLE, buf);
+		int code = vkAcquireNextImageKHR(context.gpu.handle(), swapchain, Long.MAX_VALUE, semaphore, VK_NULL_HANDLE, buf);
 		
 		IntResult result = new IntResult();
 		
@@ -505,30 +496,66 @@ public class VknInternalUtils
 		public int code;
 	}
 	
-	public static LongId createBuffer(VkDevice device, VkBufferCreateInfo createInfo, MemoryStack stack)
+	public static LongId createBuffer(VknContext context, VkBufferCreateInfo createInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.callocLong(1);
 		
-		vkCreateBuffer(device, createInfo, null, buf);
+		vkCreateBuffer(context.gpu.handle(), createInfo, null, buf);
 		
-		return new LongId(buf.get(0));
+		return HandleRegistry.BUFFER.register(buf.get(0));
 	}
 	
-	public static long mapMemory(VkDevice device, long memory, long offset, long size, int flags, MemoryStack stack)
+	public static long mapMemory(VknContext context, long memory, long offset, long size, int flags, MemoryStack stack)
 	{
 		PointerBuffer buf = stack.mallocPointer(1);
 		
-		vkMapMemory(device, memory, offset, size, flags, buf);
+		vkMapMemory(context.gpu.handle(), memory, offset, size, flags, buf);
 		
 		return buf.get(0);
 	}
 	
-	public static long allocateMemory(VkDevice device, VkMemoryAllocateInfo allocateInfo, MemoryStack stack)
+	public static long allocateMemory(VknContext context, VkMemoryAllocateInfo allocateInfo, MemoryStack stack)
 	{
 		LongBuffer buf = stack.mallocLong(1);
 		
-		vkAllocateMemory(device, allocateInfo, null, buf);
+		vkAllocateMemory(context.gpu.handle(), allocateInfo, null, buf);
 		
 		return buf.get(0);
+	}
+	
+	public static void destroyPipelineLayout(VknContext context, LongId id)
+	{
+		long handle = HandleRegistry.PIPELINE_LAYOUT.get(id);
+		
+		vkDestroyPipelineLayout(context.gpu.handle(), handle, null);
+		
+		HandleRegistry.PIPELINE_LAYOUT.remove(id);
+	}
+	
+	public static void destroyPipeline(VknContext context, LongId id)
+	{
+		long handle = HandleRegistry.PIPELINE.get(id);
+		
+		vkDestroyPipeline(context.gpu.handle(), handle, null);
+		
+		HandleRegistry.PIPELINE.remove(id);
+	}
+	
+	public static void destroyRenderPass(VknContext context, LongId id)
+	{
+		long handle = HandleRegistry.RENDERPASS.get(id);
+		
+		vkDestroyRenderPass(context.gpu.handle(), handle, null);
+		
+		HandleRegistry.RENDERPASS.remove(id);
+	}
+	
+	public static void destroyBuffer(VknContext context, LongId id)
+	{
+		long handle = HandleRegistry.BUFFER.get(id);
+		
+		vkDestroyBuffer(context.gpu.handle(), handle, null);
+		
+		HandleRegistry.BUFFER.remove(id);
 	}
 }

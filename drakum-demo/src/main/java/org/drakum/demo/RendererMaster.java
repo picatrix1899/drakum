@@ -12,6 +12,7 @@ import org.barghos.math.matrix.Mat4F;
 import org.barghos.math.quaternion.QuatF;
 import org.barghos.util.math.MathUtils;
 import org.drakum.demo.Model.Vertex;
+import org.drakum.demo.registry.HandleRegistry;
 import org.drakum.demo.registry.LongId;
 import org.drakum.demo.registry.Registry;
 import org.drakum.demo.vkn.CommonRenderContext;
@@ -183,11 +184,11 @@ public class RendererMaster
 			pipelineLayoutCreateInfo.pSetLayouts(stack.longs(pipelineDescriptorLayouts));
 			pipelineLayoutCreateInfo.setLayoutCount(pipelineDescriptorLayouts.length);
 			
-			LongId pipelineLayout = VknInternalUtils.createPipelineLayout(CommonRenderContext.context.gpu.handle(), pipelineLayoutCreateInfo, stack);
+			LongId pipelineLayout = VknInternalUtils.createPipelineLayout(CommonRenderContext.context, pipelineLayoutCreateInfo, stack);
 			
 			VknPipeline.Settings pipelineCreateSettings = new VknPipeline.Settings(CommonRenderContext.context);
-			pipelineCreateSettings.pipelineLayout = pipelineLayout.getLongHandle();
-			pipelineCreateSettings.renderPass = renderPass.handle().handle();
+			pipelineCreateSettings.pipelineLayout = pipelineLayout;
+			pipelineCreateSettings.renderPass = renderPass.handle();
 			pipelineCreateSettings.bindingDescriptions = attribFormat.genBindingDescription(0, stack);
 			pipelineCreateSettings.attributeDescriptions = attribFormat.genAttribDescription(0, stack);
 			pipelineCreateSettings.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertexShader);
@@ -207,12 +208,14 @@ public class RendererMaster
 		descriptorSetAllocateInfo.descriptorPool(uboDescriptorPool.handle());
 		descriptorSetAllocateInfo.pSetLayouts(stack.longs(layouts));
 		
-		descriptorSets = VknInternalUtils.allocateDescriptorSets(CommonRenderContext.context.gpu.handle(), descriptorSetAllocateInfo, window.inFlightFrameCount, stack);
+		descriptorSets = VknInternalUtils.allocateDescriptorSets(CommonRenderContext.context, descriptorSetAllocateInfo, window.inFlightFrameCount, stack);
 		
 		for(int i = 0; i < window.inFlightFrameCount; i++)
 		{
+			long uniformBufferHandle = HandleRegistry.BUFFER.get(uniformBuffers[i].handle());
+			
 			VkDescriptorBufferInfo.Buffer descriptorBufferInfo = VkDescriptorBufferInfo.calloc(1, stack);
-			descriptorBufferInfo.buffer(uniformBuffers[i].handle().handle());
+			descriptorBufferInfo.buffer(uniformBufferHandle);
 			descriptorBufferInfo.offset(0);
 			descriptorBufferInfo.range(UBO.byteSize());
 
@@ -369,9 +372,11 @@ public class RendererMaster
 			.stageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
 			.run();
 			
+			long renderPassHandle = HandleRegistry.RENDERPASS.get(renderPass.handle());
+			
 			VkRenderPassBeginInfo renderPassBeginInfo = VkRenderPassBeginInfo.calloc(stack);
 			renderPassBeginInfo.sType$Default();
-			renderPassBeginInfo.renderPass(renderPass.handle().handle());
+			renderPassBeginInfo.renderPass(renderPassHandle);
 			renderPassBeginInfo.framebuffer(sceneFramebuffer.handle());
 			renderPassBeginInfo.renderArea(renderArea);
 			renderPassBeginInfo.clearValueCount(1);
@@ -397,22 +402,28 @@ public class RendererMaster
 		key.attribFormatId = model.model.attribFormat().id();
 		key.materialTypeId = model.material.type.getId();
 		
-		RenderPipeline pipeline = Registry.pipelineRegistry.get(key);
+		VknPipeline pipeline = Registry.vkPipelineRegistry.get(key);
 		
-		vkCmdBindPipeline(window.swapchain.currentCmdBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
+		long pipelineHandle = HandleRegistry.PIPELINE.get(pipeline.handle());
+		long pipelineLayoutHandle = HandleRegistry.PIPELINE_LAYOUT.get(pipeline.layoutHandle());
+		
+		vkCmdBindPipeline(window.swapchain.currentCmdBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineHandle);
 
 		VknUtil.cmdSetViewport(window.swapchain.currentCmdBuffer(), 0.0f, 0.0f, window.framebufferExtent.width(), window.framebufferExtent.height(), 0.0f, 1.0f, stack);
 		
 		VknUtil.cmdSetScissor(window.swapchain.currentCmdBuffer(), 0, 0, window.framebufferExtent.width(), window.framebufferExtent.height(), stack);
 		
-		LongBuffer vertexBuffers = stack.longs(model.model.vertexBuffer.handle().handle());
+		long vertexBufferHandle = HandleRegistry.BUFFER.get(model.model.vertexBuffer.handle());
+		long indexBufferHandle = HandleRegistry.BUFFER.get(model.model.indexBuffer.handle());
+		
+		LongBuffer vertexBuffers = stack.longs(vertexBufferHandle);
 		LongBuffer offsets = stack.longs(0);
 		
 		vkCmdBindVertexBuffers(window.swapchain.currentCmdBuffer(), 0, vertexBuffers, offsets);
 		
-		vkCmdBindIndexBuffer(window.swapchain.currentCmdBuffer(), model.model.indexBuffer.handle().handle(), 0, VK_INDEX_TYPE_UINT32);
+		vkCmdBindIndexBuffer(window.swapchain.currentCmdBuffer(), indexBufferHandle, 0, VK_INDEX_TYPE_UINT32);
 		
-		vkCmdBindDescriptorSets(window.swapchain.currentCmdBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layoutHandle, 0, stack.longs(descriptorSets[window.swapchain.currentInFlightFrame()], model.material.type.getDescSet(this.textureDescriptorPool.handle(), model.material)), null);
+		vkCmdBindDescriptorSets(window.swapchain.currentCmdBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayoutHandle, 0, stack.longs(descriptorSets[window.swapchain.currentInFlightFrame()], model.material.type.getDescSet(this.textureDescriptorPool.handle(), model.material)), null);
 		
 		vkCmdDrawIndexed(window.swapchain.currentCmdBuffer(), model.model.indicesCount, 1, 0, 0, 0);
 	}

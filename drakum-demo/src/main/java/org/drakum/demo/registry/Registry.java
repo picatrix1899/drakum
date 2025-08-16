@@ -22,8 +22,7 @@ import org.drakum.demo.vkn.VknShaderModule;
 public class Registry
 {
 	public static Map<PipelineKey,VknPipeline> vkPipelineRegistry = new HashMap<>();
-	public static Map<PipelineKey,Long> pipelineLayoutRegistry = new HashMap<>();
-	public static Map<PipelineKey,RenderPipeline> pipelineRegistry = new HashMap<>();
+	public static Map<PipelineKey,LongId> pipelineLayoutRegistry = new HashMap<>();
 	
 	public static List<PipelineResourceContainer> pipelineResources = new ArrayList<>();
 	public static List<PipelineLayoutResourceContainer> pipelineLayoutResources = new ArrayList<>();
@@ -35,22 +34,16 @@ public class Registry
 	public static List<MaterialResourceContainer> materialResources = new ArrayList<>();
 	public static List<BufferResourceContainer> bufferResources = new ArrayList<>();
 	
-	public static RenderPipeline registerPipeline(AttribFormat attribFormat, MaterialType materialType, VknPipeline pipeline)
+	public static void registerPipeline(AttribFormat attribFormat, MaterialType materialType, VknPipeline pipeline)
 	{
 		PipelineKey key = new PipelineKey();
 		key.attribFormatId = attribFormat.id();
 		key.materialTypeId = materialType.getId();
 		
-		if(pipelineRegistry.containsKey(key)) return null;
+		if(vkPipelineRegistry.containsKey(key)) return;
 		
 		vkPipelineRegistry.put(key, pipeline);
 		pipelineLayoutRegistry.put(key, pipeline.layoutHandle());
-		
-		RenderPipeline p = new RenderPipeline();
-		p.handle = pipeline.handle().getLongHandle();
-		p.layoutHandle = pipeline.layoutHandle();
-		
-		pipelineRegistry.put(key, p);
 		
 		PipelineResourceContainer pipelineResourceContainer = new PipelineResourceContainer();
 		pipelineResourceContainer.context = CommonRenderContext.context;
@@ -60,19 +53,18 @@ public class Registry
 		
 		PipelineLayoutResourceContainer pipelineLayoutResourceContainer = new PipelineLayoutResourceContainer();
 		pipelineLayoutResourceContainer.context = CommonRenderContext.context;
-		pipelineLayoutResourceContainer.handle = new LongId(pipeline.layoutHandle());
+		pipelineLayoutResourceContainer.handle = pipeline.layoutHandle();
 		
 		pipelineLayoutResources.add(pipelineLayoutResourceContainer);
-		
-		return p;
-		
 	}
 	
-	public static RenderPipeline createPipeline(AttribFormat attribFormat, MaterialType materialType, VknPipeline.Settings settings)
+	public static VknPipeline createPipeline(AttribFormat attribFormat, MaterialType materialType, VknPipeline.Settings settings)
 	{
 		VknPipeline graphicsPipeline = new VknPipeline(settings);
 		
-		return Registry.registerPipeline(attribFormat, materialType, graphicsPipeline);
+		Registry.registerPipeline(attribFormat, materialType, graphicsPipeline);
+		
+		return graphicsPipeline;
 	}
 	
 	public static void registerModel(Model model)

@@ -114,7 +114,7 @@ public class VknRenderPass
 			renderPassCreateInfo.pSubpasses(subpassDescriptions);
 			renderPassCreateInfo.pDependencies(subpassDependencies);
 
-			this.handle = VknInternalUtils.createRenderPass(this.context.gpu.handle(), renderPassCreateInfo, stack);
+			this.handle = VknInternalUtils.createRenderPass(this.context, renderPassCreateInfo, stack);
 		}
 	}
 	
@@ -130,7 +130,7 @@ public class VknRenderPass
 	
 	public void close()
 	{
-		vkDestroyRenderPass(this.context.gpu.handle(), this.handle.handle(), null);
+		VknInternalUtils.destroyRenderPass(context, handle);
 	}
 	
 	public static class Settings

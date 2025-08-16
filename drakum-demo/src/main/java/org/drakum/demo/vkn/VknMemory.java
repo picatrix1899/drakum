@@ -27,7 +27,7 @@ public class VknMemory
 			memoryAllocateInfo.allocationSize(this.size);
 			memoryAllocateInfo.memoryTypeIndex(this.context.gpu.findMemoryType(settings.memoryTypeBits, settings.properties, stack));
 
-			this.handle = new LongId(VknInternalUtils.allocateMemory(this.context.gpu.handle(), memoryAllocateInfo, stack));
+			this.handle = new LongId(VknInternalUtils.allocateMemory(this.context, memoryAllocateInfo, stack));
 		}
 	}
 	
@@ -60,7 +60,7 @@ public class VknMemory
 		
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
-			this.mappedHandle = VknInternalUtils.mapMemory(this.context.gpu.handle(), this.handle.handle(), 0, size, 0, stack);
+			this.mappedHandle = VknInternalUtils.mapMemory(this.context, this.handle.handle(), 0, size, 0, stack);
 		}
 	}
 	

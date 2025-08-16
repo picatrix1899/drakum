@@ -1,0 +1,7 @@
+name=<name>
+
+texture=<path>/<file>.png
+normalMap=<path>/<file>.png
+
+specular.intensity=0.5
+specular.power=10

@@ -1,0 +1,5 @@
+name=barrel_dry
+texture=barrel
+normalMap=barrel_normal
+specular.intensity=0.4
+specular.power=2.0

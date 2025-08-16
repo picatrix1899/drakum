@@ -35,7 +35,7 @@ public class VknSampler
 	        samplerInfo.maxLod(settings.maxLod);
 	        samplerInfo.mipLodBias(settings.mipLodBias);
 
-			this.handle = VknInternalUtils.createSampler(this.context.gpu.handle(), samplerInfo, stack);
+			this.handle = VknInternalUtils.createSampler(this.context, samplerInfo, stack);
 		}
 	}
 	

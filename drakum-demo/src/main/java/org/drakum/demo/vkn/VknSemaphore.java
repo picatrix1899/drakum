@@ -31,7 +31,7 @@ public class VknSemaphore
 			semaphoreCreateInfo.sType$Default();
 			if(semaphoreTypeCreateInfo != null) semaphoreCreateInfo.pNext(semaphoreTypeCreateInfo);
 			
-			this.handle = VknInternalUtils.createSemaphore(this.context.gpu.handle(), semaphoreCreateInfo, stack);
+			this.handle = VknInternalUtils.createSemaphore(this.context, semaphoreCreateInfo, stack);
 		}
 	}
 	

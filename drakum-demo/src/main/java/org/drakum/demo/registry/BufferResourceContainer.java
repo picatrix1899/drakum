@@ -1,8 +1,7 @@
 package org.drakum.demo.registry;
 
-import static org.lwjgl.vulkan.VK14.*;
-
 import org.drakum.demo.vkn.VknContext;
+import org.drakum.demo.vkn.VknInternalUtils;
 
 public class BufferResourceContainer implements IResourceContainer
 {
@@ -13,7 +12,7 @@ public class BufferResourceContainer implements IResourceContainer
 	@Override
 	public void close()
 	{
-		vkDestroyBuffer(this.context.gpu.handle(), this.handle.handle(), null);
+		VknInternalUtils.destroyBuffer(context, this.handle);
 		
 		memory.close();
 	}

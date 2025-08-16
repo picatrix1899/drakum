@@ -22,7 +22,7 @@ public class VknCommandPool
 			commandPoolCreateInfo.flags(settings.flags);
 			commandPoolCreateInfo.queueFamilyIndex(settings.queueFamilyIndex);
 
-			this.handle = VknInternalUtils.createCommandPool(this.context.gpu.handle(), commandPoolCreateInfo, stack);
+			this.handle = VknInternalUtils.createCommandPool(this.context, commandPoolCreateInfo, stack);
 		}
 	}
 	

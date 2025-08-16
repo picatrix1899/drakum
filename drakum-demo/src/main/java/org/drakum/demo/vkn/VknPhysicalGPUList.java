@@ -25,7 +25,7 @@ public class VknPhysicalGPUList
 		{
 			this.context = settings.context;
 			
-			VknPhysicalGPU[] physicalGpus = VknInternalUtils.enumeratePhysicalDevices(this.context.instance.handle(), stack);
+			VknPhysicalGPU[] physicalGpus = VknInternalUtils.enumeratePhysicalDevices(this.context, stack);
 
 			record RatedGpu(int score, VknPhysicalGPU gpu) {}
 			

@@ -1,8 +1,7 @@
 package org.drakum.demo.registry;
 
-import static org.lwjgl.vulkan.VK14.*;
-
 import org.drakum.demo.vkn.VknContext;
+import org.drakum.demo.vkn.VknInternalUtils;
 
 public class PipelineLayoutResourceContainer implements IResourceContainer
 {
@@ -12,8 +11,6 @@ public class PipelineLayoutResourceContainer implements IResourceContainer
 	@Override
 	public void close()
 	{
-		long vkHandle = handle.getLongHandle();
-		
-		vkDestroyPipelineLayout(this.context.gpu.handle(), handle.handle(), null);
+		VknInternalUtils.destroyPipelineLayout(context, handle);
 	}
 }

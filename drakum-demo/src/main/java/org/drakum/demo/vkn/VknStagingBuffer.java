@@ -9,6 +9,8 @@ import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 
+import org.drakum.demo.registry.HandleRegistry;
+import org.drakum.demo.registry.LongId;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.VkBufferCopy;
@@ -53,7 +55,7 @@ public class VknStagingBuffer implements AutoCloseable
 			commandBufferAllocateInfo.commandPool(this.context.commandPool.handle());
 			commandBufferAllocateInfo.commandBufferCount(1);
 			
-			this.cmdBuffer = VknInternalUtils.allocateCommandBuffer(this.context.gpu.handle(), commandBufferAllocateInfo, stack);
+			this.cmdBuffer = VknInternalUtils.allocateCommandBuffer(this.context, commandBufferAllocateInfo, stack);
 		}
 	}
 	
@@ -222,7 +224,9 @@ public class VknStagingBuffer implements AutoCloseable
 			bufferImageCopy.imageOffset().set(0, 0, 0);
 			bufferImageCopy.imageExtent().set(width, height, depth);
 			
-			vkCmdCopyBufferToImage(cmdBuffer, buffer.handle().handle(), image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, bufferImageCopy);
+			long ownBufferHandle = HandleRegistry.BUFFER.get(this.buffer.handle());
+			
+			vkCmdCopyBufferToImage(cmdBuffer, ownBufferHandle, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, bufferImageCopy);
 			
 			new VknCmdImageMemoryBarrier(cmdBuffer, image)
 			.layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, finalLayout)
@@ -242,7 +246,7 @@ public class VknStagingBuffer implements AutoCloseable
 		}
 	}
 	
-	public void trasferToBuffer(long buffer)
+	public void trasferToBuffer(LongId buffer)
 	{
 		ensureValid();
 		
@@ -259,7 +263,10 @@ public class VknStagingBuffer implements AutoCloseable
 			bufferCopy.dstOffset(0);
 			bufferCopy.size(size);
 			
-			vkCmdCopyBuffer(cmdBuffer, this.buffer.handle().handle(), buffer, bufferCopy);
+			long ownBufferHandle = HandleRegistry.BUFFER.get(this.buffer.handle());
+			long targetBufferHandle = HandleRegistry.BUFFER.get(buffer);
+			
+			vkCmdCopyBuffer(cmdBuffer, ownBufferHandle, targetBufferHandle, bufferCopy);
 			
 			vkEndCommandBuffer(cmdBuffer);
 			
@@ -286,7 +293,7 @@ public class VknStagingBuffer implements AutoCloseable
 		{
 			vkFreeCommandBuffers(this.context.gpu.handle(), this.context.commandPool.handle(), stack.pointers(cmdBuffer));
 			
-			vkDestroyBuffer(this.context.gpu.handle(), this.buffer.handle().handle(), null);
+			VknInternalUtils.destroyBuffer(context, this.buffer.handle());
 			
 			if(buffer.memory.isMapped()) vkUnmapMemory(this.context.gpu.handle(), this.buffer.memoryHandle().handle());
 			

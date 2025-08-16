@@ -20,7 +20,7 @@ public class VknSurface
 		{
 			this.context = settings.context;
 			
-			this.handle = VknInternalUtils.createWindowSurface(this.context.instance.handle(), settings.window.handle(), stack);
+			this.handle = VknInternalUtils.createWindowSurface(this.context, settings.window.handle(), stack);
 
 			this.capabilities = VknInternalUtils.getPhysicalDeviceSurfaceCapabilities(settings.physicalGPU.handle(), handle, stack);
 			

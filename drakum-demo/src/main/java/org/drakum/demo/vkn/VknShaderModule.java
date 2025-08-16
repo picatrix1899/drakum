@@ -29,7 +29,7 @@ public class VknShaderModule
 			vertexShaderModuleCreateInfo.sType$Default();
 			vertexShaderModuleCreateInfo.pCode(vertexShaderData);
 
-			this.handle = VknInternalUtils.createShaderModule(this.context.gpu.handle(), vertexShaderModuleCreateInfo, stack);
+			this.handle = VknInternalUtils.createShaderModule(this.context, vertexShaderModuleCreateInfo, stack);
 		}
 	}
 	

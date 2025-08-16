@@ -29,7 +29,7 @@ public class VknImageView2D
 			imageViewCreateInfo.components().r(VK_COMPONENT_SWIZZLE_IDENTITY).g(VK_COMPONENT_SWIZZLE_IDENTITY).b(VK_COMPONENT_SWIZZLE_IDENTITY).a(VK_COMPONENT_SWIZZLE_IDENTITY);
 			imageViewCreateInfo.subresourceRange().aspectMask(VK_IMAGE_ASPECT_COLOR_BIT).baseMipLevel(0).levelCount(1).baseArrayLayer(0).layerCount(1);
 
-			this.handle = VknInternalUtils.createImageView(this.context.gpu.handle(), imageViewCreateInfo, stack);
+			this.handle = VknInternalUtils.createImageView(this.context, imageViewCreateInfo, stack);
 		}
 	}
 

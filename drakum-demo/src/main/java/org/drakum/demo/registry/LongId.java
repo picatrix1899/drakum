@@ -47,9 +47,4 @@ public class LongId
 			default: return;
 		}
 	}
-	
-	public long getLongHandle()
-	{
-		return HandleRegistry.getLong(this.handle);
-	}
 }

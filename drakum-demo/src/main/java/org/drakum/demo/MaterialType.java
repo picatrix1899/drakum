@@ -54,7 +54,7 @@ public class MaterialType
 				descriptorSetAllocateInfo.descriptorPool(descPool);
 				descriptorSetAllocateInfo.pSetLayouts(stack.longs(descSetLayout.handle()));
 				
-				long textureDescriptorSet = VknInternalUtils.allocateDescriptorSet(CommonRenderContext.context.gpu.handle(), descriptorSetAllocateInfo, stack);
+				long textureDescriptorSet = VknInternalUtils.allocateDescriptorSet(CommonRenderContext.context, descriptorSetAllocateInfo, stack);
 				
 				VkDescriptorImageInfo.Buffer imageInfo = VkDescriptorImageInfo.calloc(1, stack);
 				imageInfo.imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);

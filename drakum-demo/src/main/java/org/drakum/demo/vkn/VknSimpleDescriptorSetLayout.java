@@ -28,7 +28,7 @@ public class VknSimpleDescriptorSetLayout
 			descriptorSetLayoutCreateInfo.sType$Default();
 			descriptorSetLayoutCreateInfo.pBindings(descriptorSetLayoutBinding);
 			
-			this.handle = VknInternalUtils.createDescriptorSetLayout(CommonRenderContext.context.gpu.handle(), descriptorSetLayoutCreateInfo, stack);
+			this.handle = VknInternalUtils.createDescriptorSetLayout(CommonRenderContext.context, descriptorSetLayoutCreateInfo, stack);
 		}
 	}
 	

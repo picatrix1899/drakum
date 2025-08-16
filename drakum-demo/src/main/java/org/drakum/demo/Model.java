@@ -60,7 +60,7 @@ public class Model
 					
 			stagingBuffer.unmap();
 
-			stagingBuffer.trasferToBuffer(this.vertexBuffer.handle().handle());
+			stagingBuffer.trasferToBuffer(this.vertexBuffer.handle());
 		}
 	}
 
@@ -77,7 +77,7 @@ public class Model
 		try(VknStagingBuffer stagingBuffer = new VknStagingBuffer(new VknStagingBuffer.Settings(CommonRenderContext.context).size(4 * indices.length)))
 		{
 			stagingBuffer.store(indices);
-			stagingBuffer.trasferToBuffer(indexBuffer.handle().handle());
+			stagingBuffer.trasferToBuffer(indexBuffer.handle());
 		}
 	}
 	

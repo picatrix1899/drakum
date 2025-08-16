@@ -27,7 +27,7 @@ public class VknSimpleDescriptorPool
 			descriptorPoolCreateInfo.pPoolSizes(descriptorPoolSize);
 			descriptorPoolCreateInfo.maxSets(settings.setCount);
 			
-			this.handle = VknInternalUtils.createDescriptorPool(CommonRenderContext.context.gpu.handle(), descriptorPoolCreateInfo, stack);
+			this.handle = VknInternalUtils.createDescriptorPool(CommonRenderContext.context, descriptorPoolCreateInfo, stack);
 		}
 	}
 	

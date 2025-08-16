@@ -1,9 +1,7 @@
 package org.drakum.demo.registry;
 
-import static org.lwjgl.vulkan.VK14.*;
-
-import org.drakum.demo.vkn.CommonRenderContext;
 import org.drakum.demo.vkn.VknContext;
+import org.drakum.demo.vkn.VknInternalUtils;
 
 public class PipelineResourceContainer implements IResourceContainer
 {
@@ -13,11 +11,7 @@ public class PipelineResourceContainer implements IResourceContainer
 	@Override
 	public void close()
 	{
-		long vkHandle = handle.getLongHandle();
-		
-		vkDestroyPipeline(CommonRenderContext.context.gpu.handle(), vkHandle, null);
-		
-		HandleRegistry.removeLong(handle.handle());
+		VknInternalUtils.destroyPipeline(context, handle);
 	}
 
 }

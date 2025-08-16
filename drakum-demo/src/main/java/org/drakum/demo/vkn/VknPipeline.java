@@ -5,6 +5,7 @@ import static org.lwjgl.vulkan.VK14.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.drakum.demo.registry.HandleRegistry;
 import org.drakum.demo.registry.LongId;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkGraphicsPipelineCreateInfo;
@@ -26,7 +27,7 @@ public class VknPipeline
 {
 	private final VknContext context;
 	
-	private final long pipelineLayout;
+	private final LongId pipelineLayout;
 	
 	private LongId handle;
 	
@@ -107,6 +108,9 @@ public class VknPipeline
 			pipelineColorBlendStateCreateInfo.attachmentCount(1);
 			pipelineColorBlendStateCreateInfo.pAttachments(pipelineColoreBlendAttachmentState);
 
+			long pipelineLayoutHandle = HandleRegistry.PIPELINE_LAYOUT.get(settings.pipelineLayout);
+			long renderPassHandle = HandleRegistry.RENDERPASS.get(settings.renderPass);
+			
 			VkGraphicsPipelineCreateInfo.Buffer graphicsPipelineCreateInfo = VkGraphicsPipelineCreateInfo.calloc(1, stack);
 			graphicsPipelineCreateInfo.sType$Default();
 			graphicsPipelineCreateInfo.stageCount(2);
@@ -118,11 +122,11 @@ public class VknPipeline
 			graphicsPipelineCreateInfo.pMultisampleState(pipelineMultisampleStateCreateInfo);
 			graphicsPipelineCreateInfo.pColorBlendState(pipelineColorBlendStateCreateInfo);
 			graphicsPipelineCreateInfo.pDynamicState(dynamicStateCreateInfo);
-			graphicsPipelineCreateInfo.layout(settings.pipelineLayout);
-			graphicsPipelineCreateInfo.renderPass(settings.renderPass);
+			graphicsPipelineCreateInfo.layout(pipelineLayoutHandle);
+			graphicsPipelineCreateInfo.renderPass(renderPassHandle);
 			graphicsPipelineCreateInfo.subpass(0);
 			
-			this.handle = VknInternalUtils.createGraphicsPipeline(this.context.gpu.handle(), graphicsPipelineCreateInfo, stack);
+			this.handle = VknInternalUtils.createGraphicsPipeline(this.context, graphicsPipelineCreateInfo, stack);
 		}
 	}
 	
@@ -133,7 +137,7 @@ public class VknPipeline
 		return this.handle;
 	}
 
-	public long layoutHandle()
+	public LongId layoutHandle()
 	{
 		ensureValid();
 		
@@ -155,11 +159,11 @@ public class VknPipeline
 		private final VknContext context;
 		
 		public long[] descriptorSetLayouts;
-		public long renderPass;
+		public LongId renderPass;
 		public VkVertexInputBindingDescription.Buffer bindingDescriptions;
 		public VkVertexInputAttributeDescription.Buffer attributeDescriptions;
 		public List<ShaderSettings> shaders = new ArrayList<>();
-		public long pipelineLayout;
+		public LongId pipelineLayout;
 		
 		public Settings(VknContext context)
 		{

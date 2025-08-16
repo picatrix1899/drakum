@@ -1,0 +1,6 @@
+name=tesla
+texture=tesla
+normalMap=tesla_normal
+specular.intensity=0.4
+specular.power=2.0
+glowMap=tesla_glow

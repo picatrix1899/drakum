@@ -8,25 +8,33 @@ import it.unimi.dsi.fastutil.longs.Long2LongMap;
 
 public class HandleRegistry
 {
-	private static Long2LongMap longHandles = new Long2LongOpenHashMap();
-	private static AtomicLong current = new AtomicLong(1);
-	
-	public static long getLong(long id)
+	public static final LongRegistry PIPELINE = new LongRegistry();
+	public static final LongRegistry PIPELINE_LAYOUT = new LongRegistry();
+	public static final LongRegistry RENDERPASS = new LongRegistry();
+	public static final LongRegistry BUFFER = new LongRegistry();
+
+	public static class LongRegistry
 	{
-		return longHandles.get(id);
-	}
-	
-	public static long registerLong(long handle)
-	{
-		long id = current.getAndIncrement();
+		private Long2LongMap handles = new Long2LongOpenHashMap();
+		private AtomicLong currentId = new AtomicLong(1);
 		
-		longHandles.put(id, handle);
+		public LongId register(long handle)
+		{
+			long id = currentId.getAndIncrement();
+			
+			handles.put(id, handle);
+			
+			return new LongId(id);
+		}
 		
-		return id;
-	}
-	
-	public static void removeLong(long id)
-	{
-		longHandles.remove(id);
+		public long get(LongId id)
+		{
+			return handles.get(id.handle());
+		}
+		
+		public void remove(LongId id)
+		{
+			handles.remove(id.handle());
+		}
 	}
 }

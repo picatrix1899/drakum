@@ -102,7 +102,7 @@ public class VknSwapchain
 			commandPoolCreateInfo.flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 			commandPoolCreateInfo.queueFamilyIndex(this.context.gpu.queueFamilies().graphicsFamily);
 
-			commandPools[i] = VknInternalUtils.createCommandPool(this.context.gpu.handle(), commandPoolCreateInfo, stack);
+			commandPools[i] = VknInternalUtils.createCommandPool(this.context, commandPoolCreateInfo, stack);
 
 			VkCommandBufferAllocateInfo commandBufferAllocateInfo = VkCommandBufferAllocateInfo.calloc(stack);
 			commandBufferAllocateInfo.sType$Default();
@@ -110,7 +110,7 @@ public class VknSwapchain
 			commandBufferAllocateInfo.level(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 			commandBufferAllocateInfo.commandBufferCount(1);
 
-			commandBuffers[i] = VknInternalUtils.allocateCommandBuffer(this.context.gpu.handle(), commandBufferAllocateInfo, stack);
+			commandBuffers[i] = VknInternalUtils.allocateCommandBuffer(this.context, commandBufferAllocateInfo, stack);
 		}
 		
 		this.imageAvailableSemaphore = imageAvailableSemaphores;
@@ -140,7 +140,7 @@ public class VknSwapchain
 	{	
 		try(MemoryStack stack = MemoryStack.stackPush())
 		{
-			VknInternalUtils.IntResult result = VknInternalUtils.acquireNextImage(this.context.gpu.handle(), this.handle, imageAvailableSemaphore.handle(), stack);
+			VknInternalUtils.IntResult result = VknInternalUtils.acquireNextImage(this.context, this.handle, imageAvailableSemaphore.handle(), stack);
 			
 			return result.result;
 		}
@@ -270,9 +270,9 @@ public class VknSwapchain
 			swapchainCreateInfo.clipped(true);
 			if(oldHandle != VK_NULL_HANDLE) swapchainCreateInfo.oldSwapchain(oldHandle);
 			
-			this.handle = VknInternalUtils.createSwapchain(this.context.gpu.handle(), swapchainCreateInfo, stack);
+			this.handle = VknInternalUtils.createSwapchain(this.context, swapchainCreateInfo, stack);
 
-			long[] rawSwapchainImages = VknInternalUtils.getSwapchainImages(this.context.gpu.handle(), handle, stack);
+			long[] rawSwapchainImages = VknInternalUtils.getSwapchainImages(this.context, handle, stack);
 			
 			VknExternalImage2D[] swapchainImages = new VknExternalImage2D[rawSwapchainImages.length];
 			VknImageView2D[] swapchainImageViews = new VknImageView2D[rawSwapchainImages.length];

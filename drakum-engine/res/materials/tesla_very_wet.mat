@@ -1,0 +1,6 @@
+name=tesla_very_wet
+texture=tesla
+normalMap=tesla_normal
+specular.intensity=2.0
+specular.power=8.0
+glowMap=tesla_glow

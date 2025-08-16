@@ -8,6 +8,7 @@ import java.util.List;
 
 import org.barghos.util.container.ints.Extent2I;
 import org.drakum.demo.VknObjectType;
+import org.drakum.demo.registry.HandleRegistry;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkFramebufferCreateInfo;
 
@@ -36,16 +37,18 @@ public class VknFramebuffer2D
 				attachmentBuffer.put(i, settings.attachments.get(i).handle().handle());
 			}
 			
+			long renderPassHandle = HandleRegistry.RENDERPASS.get(settings.renderPass.handle());
+			
 			VkFramebufferCreateInfo framebufferCreateInfo = VkFramebufferCreateInfo.calloc(stack);
 			framebufferCreateInfo.sType$Default();
-			framebufferCreateInfo.renderPass(settings.renderPass.handle().handle());
+			framebufferCreateInfo.renderPass(renderPassHandle);
 			framebufferCreateInfo.attachmentCount(attachmentCount);
 			framebufferCreateInfo.pAttachments(attachmentBuffer);
 			framebufferCreateInfo.width(settings.width);
 			framebufferCreateInfo.height(settings.height);
 			framebufferCreateInfo.layers(1);
 
-			this.handle = VknInternalUtils.createFramebuffer(this.context.gpu.handle(), framebufferCreateInfo, stack);
+			this.handle = VknInternalUtils.createFramebuffer(this.context, framebufferCreateInfo, stack);
 		}
 	}
 	

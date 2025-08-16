@@ -29,7 +29,7 @@ subprojects {
   testing {
     suites {
       test {
-        useJUnitJupiter('$junitJupiterVersion')
+        useJUnitJupiter("$junitJupiterVersion")
       }
     }
   }
@@ -101,29 +101,6 @@ subprojects {
         credentials {
           username = System.getenv('USERNAME')
           password = System.getenv('TOKEN')
-        }
-      }
-    }
-
-    publications {
-      mavenJava(MavenPublication) {
-        pom {
-          url = 'https://github.com/picatrix1899/drakum/'
-
-          licenses {
-            license {
-              name = 'MIT'
-              url = 'https://github.com/picatrix1899/drakum/blob/master/LICENSE'
-              distribution = 'repo'
-            }
-          }
-
-          developers {
-            developer {
-              id = 'picatrix1899'
-              name = 'Florian Zilkenat (picatrix1899)'
-            }
-          }
         }
       }
     }

@@ -1,8 +1,7 @@
 package org.drakum.demo.registry;
 
-import static org.lwjgl.vulkan.VK14.*;
-
 import org.drakum.demo.vkn.VknContext;
+import org.drakum.demo.vkn.VknInternalUtils;
 
 public class RenderPassResourceContainer implements IResourceContainer
 {
@@ -12,7 +11,7 @@ public class RenderPassResourceContainer implements IResourceContainer
 	@Override
 	public void close()
 	{
-		vkDestroyRenderPass(this.context.gpu.handle(), this.handle.handle(), null);
+		VknInternalUtils.destroyRenderPass(context, handle);
 	}
 
 }

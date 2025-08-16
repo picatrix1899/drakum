@@ -42,9 +42,9 @@ public class VknImage2D implements IVknImage2D
 			imageInfo.sharingMode(settings.sharingMode);
 			imageInfo.initialLayout(settings.initialLayout);
 			
-			this.handle = VknInternalUtils.createImage(this.context.gpu.handle(), imageInfo, stack);
+			this.handle = VknInternalUtils.createImage(this.context, imageInfo, stack);
 
-			VkMemoryRequirements memoryRequirements = VknInternalUtils.getImageMemoryRequirements(this.context.gpu.handle(), this.handle, stack);
+			VkMemoryRequirements memoryRequirements = VknInternalUtils.getImageMemoryRequirements(this.context, this.handle, stack);
 			
 			this.memoryRequirements = new MemoryRequirements();
 			this.memoryRequirements.size = memoryRequirements.size();
