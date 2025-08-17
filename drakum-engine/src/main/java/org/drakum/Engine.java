@@ -6,11 +6,16 @@ import java.io.File;
 
 import org.barghos.math.matrix.Mat4F;
 import org.barghos.util.math.MathUtils;
+import org.drakum.hid.HidManager;
 import org.drakum.old.Colored_DBGShader;
 import org.drakum.old.Mesh;
 import org.drakum.old.OBJFile;
-
-import static org.lwjgl.glfw.GLFW.*;
+import org.drakum.rhi.RenderApi;
+import org.drakum.rhi.ogl.OglRhiApi;
+import org.drakum.window.Window;
+import org.drakum.window.WindowEventHandler;
+import org.drakum.window.WindowFactory;
+import org.drakum.window.WindowState;
 
 public class Engine
 {
@@ -36,26 +41,25 @@ public class Engine
 	
 	public void init()
 	{
-		if(!glfwInit())
-		{
-			throw new Error("Cannot init glfw");
-		}
-		
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+		RenderApi.api(new OglRhiApi());
 		
 		WindowState windowState = new WindowState();
 		windowState.width = 800;
 		windowState.height = 600;
 		windowState.title = "Drakum Demo";
 		
-		Window.Settings windowSettings = new Window.Settings();
-		windowSettings.state = windowState;
-		windowSettings.isResizable = true;
-		windowSettings.closeRequestedEventCallback = (_) -> stop();
+		WindowEventHandler windowEventHandler = new WindowEventHandler();
+		windowEventHandler.callbackClose = () -> stop();
 		
-		Window window = new Window(windowSettings);
+		WindowFactory.CreateSettings windowCreateSettings = new WindowFactory.CreateSettings();
+		windowCreateSettings.state = windowState;
+		windowCreateSettings.isResizable = true;
+		windowCreateSettings.windowEventHandler = windowEventHandler;
+		
+		Window window = WindowFactory.create(windowCreateSettings);
 		this.window = window;
+		
+		this.window.makeCurrent();
 		
 		glViewport(0, 0, 800,  600);
 		
@@ -91,9 +95,9 @@ public class Engine
 		
 		this.shader.cleanup();
 		
-		this.window.destroyResource();
+		WindowFactory.destroy(this.window);
 		
-		glfwTerminate();
+		RenderApi.freeResources();
 	}
 	
 	public void cycle()
@@ -104,12 +108,13 @@ public class Engine
 	
 	public void update()
 	{
-		glfwPollEvents();
+		HidManager.update();
 	}
 	
 	public void render()
 	{
-		this.window.beginFrame(0);
+		this.window.makeCurrent();
+		this.window.beginFrame();
 		
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -133,6 +138,6 @@ public class Engine
 		
 		shader.stop();
 		
-		this.window.endFrame(0);
+		this.window.endFrame();
 	}
 }

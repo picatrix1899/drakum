@@ -1,4 +1,4 @@
-package org.drakum;
+package org.drakum.window;
 
 public class WindowState
 {

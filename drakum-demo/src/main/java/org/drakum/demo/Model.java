@@ -2,7 +2,7 @@ package org.drakum.demo;
 
 import java.lang.foreign.MemorySegment;
 
-import org.barghos.util.CoreType;
+import org.barghos.util.memory.CoreType;
 import org.drakum.demo.vkn.CommonRenderContext;
 import org.drakum.demo.vkn.VknBuffer;
 import org.drakum.demo.vkn.VknStagingBuffer;
