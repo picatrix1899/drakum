@@ -8,7 +8,7 @@ import java.util.List;
 import org.barghos.math.matrix.Mat4F;
 import org.barghos.math.vector.Vec3F;
 import org.barghos.util.tuple.Tup2;
-import org.drakum.App;
+import org.drakum.demo.App;
 
 public class Colored_DBGShader extends DebugShader
 {

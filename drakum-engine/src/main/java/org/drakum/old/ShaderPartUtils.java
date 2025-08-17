@@ -3,7 +3,7 @@ package org.drakum.old;
 import java.io.IOException;
 import java.net.URL;
 
-import org.drakum.App;
+import org.drakum.demo.App;
 
 public class ShaderPartUtils
 {
