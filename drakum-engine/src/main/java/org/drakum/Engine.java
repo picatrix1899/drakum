@@ -17,32 +17,37 @@ import org.drakum.window.WindowEventHandler;
 import org.drakum.window.WindowFactory;
 import org.drakum.window.WindowState;
 
-public class Engine
+public class Engine implements IEngineLoopListener
 {
-	private boolean isRunning;
-	
 	private Window window;
 	
 	private Colored_DBGShader shader;
 
 	private Mesh mesh;
 	
+	private IEngineLoop engineLoop;
+	
 	public void start()
 	{
-		this.isRunning = true;
+		this.engineLoop = new SimpleEngineLoop();
 		
-		run();
+		this.engineLoop.start(this);
 	}
 	
 	public void stop()
 	{
-		this.isRunning = false;
+		this.engineLoop.stop();
 	}
 	
-	public void init()
+	@Override
+	public void preInit()
 	{
 		RenderApi.api(new OglRhiApi());
-		
+	}
+	
+	@Override
+	public void init()
+	{
 		WindowState windowState = new WindowState();
 		windowState.width = 800;
 		windowState.height = 600;
@@ -77,48 +82,19 @@ public class Engine
 		this.window.show();
 	}
 	
-	public void run()
-	{
-		init();
-		
-		while(this.isRunning)
-		{
-			cycle();
-		}
-		
-		cleanup();
-	}
-	
-	public void cleanup()
-	{
-		this.mesh.vao.clear();
-		
-		this.shader.cleanup();
-		
-		WindowFactory.destroy(this.window);
-		
-		RenderApi.freeResources();
-	}
-	
-	public void cycle()
-	{
-		update();
-		render();
-	}
-	
-	public void update()
-	{
-		HidManager.update();
-	}
-	
-	public void render()
+	@Override
+	public void preRender()
 	{
 		this.window.makeCurrent();
 		this.window.beginFrame();
 		
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT);
-		
+	}
+	
+	@Override
+	public void render()
+	{
 		Mat4F proj = new Mat4F().setPerspective(MathUtils.DEG_TO_RADf * 70.0f, 800.0f / 600.0f, 0.01f, 10000f);
 
 		shader.loadProjectionMatrix(proj);
@@ -137,7 +113,29 @@ public class Engine
 		glBindVertexArray(0);
 		
 		shader.stop();
-		
+	}
+
+	@Override
+	public void postRender()
+	{
 		this.window.endFrame();
+	}
+	
+	@Override
+	public void preUpdate()
+	{
+		HidManager.update();
+	}
+
+	@Override
+	public void freeResources()
+	{
+		this.mesh.vao.clear();
+		
+		this.shader.cleanup();
+		
+		WindowFactory.destroy(this.window);
+		
+		RenderApi.freeResources();
 	}
 }
