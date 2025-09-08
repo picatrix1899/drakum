@@ -1,4 +1,4 @@
- package org.drakum.demo;
+ package org.drakum;
 
 import java.io.BufferedReader;
 import java.io.File;

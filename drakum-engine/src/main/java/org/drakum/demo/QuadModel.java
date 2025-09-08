@@ -5,6 +5,8 @@ import static org.lwjgl.opengl.GL11C.GL_UNSIGNED_INT;
 import static org.lwjgl.opengl.GL11C.glDrawElements;
 import static org.lwjgl.opengl.GL46C.*;
 
+import org.drakum.Vao;
+
 public class QuadModel
 {
 	private Vao vao;

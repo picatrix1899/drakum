@@ -1,4 +1,4 @@
-package org.drakum.demo;
+package org.drakum;
 
 import static org.lwjgl.opengl.GL11C.GL_TRIANGLES;
 import static org.lwjgl.opengl.GL11C.GL_UNSIGNED_INT;
