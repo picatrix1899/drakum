@@ -1,10 +1,9 @@
- package org.drakum.old;
+ package org.drakum.demo;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.util.ArrayList;
-import java.util.List;
 
 import org.barghos.math.shapes.Triangle3F;
 import org.barghos.math.vector.Vec2F;
@@ -13,13 +12,13 @@ import org.barghos.math.vector.Vec3F;
 
 public class OBJFile
 {
-	public List<Triangle3F> triangles = new ArrayList<>();
-	public List<TriangleData> data = new ArrayList<>();
+	public ArrayList<Triangle3F> triangles = new ArrayList<>();
+	public ArrayList<TriangleData> data = new ArrayList<>();
 
-	private List<Vec2F> uvs = new ArrayList<>();
-	private List<Vec3F> normals = new ArrayList<>();
-	private List<Vec3F> pos = new ArrayList<>();
-	public List<Integer> indices = new ArrayList<>();
+	private ArrayList<Vec2F> uvs = new ArrayList<>();
+	private ArrayList<Vec3F> normals = new ArrayList<>();
+	private ArrayList<Vec3F> pos = new ArrayList<>();
+	public ArrayList<Integer> indices = new ArrayList<>();
 	
 	public void load(File file)
 	{
@@ -118,10 +117,8 @@ public class OBJFile
 	
 	private void calculateTangents(Vertex a, Vertex b, Vertex c)
 	{
-		b.pos.subN(a.pos);
-		
-		Vec3F deltaPos1 = b.pos.subN(a.pos);
-		Vec3F deltaPos2 = c.pos.subN(a.pos);
+		Vec3F deltaPos1 = a.pos.vecToN(b.pos);
+		Vec3F deltaPos2 = a.pos.vecToN(c.pos);
 		
 		Vec2F uv0 = a.uv;
 		Vec2F uv1 = b.uv;

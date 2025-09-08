@@ -1,4 +1,4 @@
-package org.drakum.old;
+package org.drakum.demo;
 
 import org.barghos.math.vector.Vec2F;
 import org.barghos.math.vector.Vec3F;
