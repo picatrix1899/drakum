@@ -1,0 +1,70 @@
+plugins {
+    id 'application'
+}
+
+dependencies {
+  implementation platform("org.lwjgl:lwjgl-bom:$lwjglVersion")
+  
+  implementation "org.lwjgl:lwjgl"
+  implementation "org.lwjgl:lwjgl-glfw"
+  implementation "org.lwjgl:lwjgl-vulkan"
+  implementation "org.lwjgl:lwjgl-opengl"
+  
+  implementation "org.joml:joml:$jomlVersion"
+  implementation "it.unimi.dsi:fastutil:$fastUtilsVersion"
+  implementation 'com.google.code.gson:gson:2.13.1'
+  
+  implementation "org.barghos:barghos-util:$barghosVersion"
+  implementation "org.barghos:barghos-math:$barghosVersion"
+  implementation "org.barghos:barghos-event:$barghosVersion"
+  
+  runtimeOnly "org.lwjgl:lwjgl::natives-windows"
+  runtimeOnly "org.lwjgl:lwjgl-glfw::natives-windows"
+  runtimeOnly "org.lwjgl:lwjgl-opengl::natives-windows"
+  runtimeOnly "org.lwjgl:lwjgl::natives-linux"
+  runtimeOnly "org.lwjgl:lwjgl-glfw::natives-linux"
+  runtimeOnly "org.lwjgl:lwjgl-opengl::natives-linux"
+  runtimeOnly "org.lwjgl:lwjgl::natives-macos"
+  runtimeOnly "org.lwjgl:lwjgl-glfw::natives-macos"
+  runtimeOnly "org.lwjgl:lwjgl-opengl::natives-macos"
+}
+
+publishing {
+  publications {
+	mavenJava(MavenPublication) {
+	  artifactId = 'drakum-engine-vk'
+		
+	  from components.java
+		
+	  pom {
+	      url = 'https://github.com/picatrix1899/drakum/'
+
+          licenses {
+            license {
+              name = 'MIT'
+              url = 'https://github.com/picatrix1899/drakum/blob/master/LICENSE'
+              distribution = 'repo'
+            }
+          }
+
+          developers {
+            developer {
+              id = 'picatrix1899'
+              name = 'Florian Zilkenat (picatrix1899)'
+            }
+          }
+	  
+		name = 'Project Barghos Documentation Library'
+		description = 'This library contains the documentation annotations of Project Barghos.'
+		url = 'https://github.com/picatrix1899/drakum/'
+	  }
+	}
+  }
+}
+
+eclipse {
+  project {
+	name = 'drakum-engine-vk'
+	comment = ''
+  }
+}

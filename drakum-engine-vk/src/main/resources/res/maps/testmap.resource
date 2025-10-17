@@ -1,0 +1,17 @@
+[meshes]
+crate:crate
+tesla:tesla
+barrel:barrel
+boulder:boulder
+[materials]
+crate
+bricks2
+steelfloor
+barrel_very_wet
+boulder_wet
+tesla_very_wet
+[static-models]
+crate:crate:crate
+tesla:tesla:tesla_very_wet
+barrel:barrel:barrel_very_wet
+boulder:boulder:boulder_wet

@@ -1,5 +1,6 @@
 package org.drakum.demo.vkn;
 
+import org.barghos.glfw.window.GlfwWindow;
 import org.barghos.util.container.ints.Extent2I;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkExtent2D;
@@ -8,7 +9,7 @@ public class VknWindow
 {
 	private final VknContext context;
 	
-	private VknWindowShell windowShell;
+	private GlfwWindow windowShell;
 	private VknSurface surface;
 	public VknSwapchain swapchain;
 	public int inFlightFrameCount;
@@ -20,12 +21,12 @@ public class VknWindow
 		{
 			this.context = settings.context;
 			
-			VknWindowShell.Settings windowCreateSettings = new VknWindowShell.Settings();
-			windowCreateSettings.width = settings.width;
-			windowCreateSettings.height = settings.height;
+			GlfwWindow.Settings windowCreateSettings = new GlfwWindow.Settings();
+			windowCreateSettings.windowWidth = settings.width;
+			windowCreateSettings.windowHeight = settings.height;
 			windowCreateSettings.title = settings.title;
 			
-			VknWindowShell windowShell = new VknWindowShell(windowCreateSettings);
+			GlfwWindow windowShell = GlfwWindow.create(windowCreateSettings);
 			
 			VknSurface.Settings surfaceCreateSettings = new VknSurface.Settings(this.context);
 			surfaceCreateSettings.window = windowShell;
@@ -72,10 +73,10 @@ public class VknWindow
 	{
 		this.swapchain.close();
 		this.surface.close();
-		this.windowShell.close();
+		this.windowShell.releaseResources();
 	}
 	
-	public VknWindowShell windowShell()
+	public GlfwWindow windowShell()
 	{
 		return this.windowShell;
 	}

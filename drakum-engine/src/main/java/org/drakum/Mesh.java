@@ -3,10 +3,10 @@ package org.drakum;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.barghos.math.shapes.Triangle3F;
-import org.barghos.math.vector.Vec2F;
-import org.barghos.math.vector.Vec3F;
-import org.barghos.util.collection.ArrayUtils;
+import org.barghos.impl.math.shapes.Triangle3F;
+import org.barghos.impl.math.vector.Vec2F;
+import org.barghos.impl.math.vector.Vec3F;
+import org.barghos.impl.core.collection.ArrayUtils;
 
 import static org.lwjgl.opengl.GL46C.*;
 

@@ -1,14 +1,16 @@
 package org.drakum.demo.vkn;
 
-import static org.lwjgl.glfw.GLFWVulkan.*;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import static org.lwjgl.vulkan.VK14.*;
 import static org.lwjgl.vulkan.KHRGetSurfaceCapabilities2.*;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.LongBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.drakum.demo.FFMImpl;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
@@ -37,13 +39,15 @@ public class VknInstance
 			appInfo.engineVersion(VK_MAKE_VERSION(1, 0, 0));
 			appInfo.apiVersion(VK_API_VERSION_1_4);
 
-			PointerBuffer glfwExtensions = glfwGetRequiredInstanceExtensions();
-
+			MemorySegment exts = FFMImpl.glfwGetRequiredInstanceExtensions();
+			long[] glfwExtensions = exts.toArray(ValueLayout.JAVA_LONG);
+			
 			List<String> extensions = new ArrayList<>();
 			extensions.add(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
 			if(settings.debugMode) extensions.add(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 			
-			PointerBuffer enabledExtensions = MemoryUtil.memAllocPointer(glfwExtensions.remaining() + extensions.size());
+			PointerBuffer enabledExtensions = MemoryUtil.memAllocPointer(glfwExtensions.length + extensions.size());
+			
 			enabledExtensions.put(glfwExtensions);
 			for(String extension : extensions)
 			{
@@ -180,8 +184,6 @@ public class VknInstance
 		{
 			return this.debugMode;
 		}
-		
-		
 	}
 
 }

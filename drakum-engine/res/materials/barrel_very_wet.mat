@@ -1,6 +1,0 @@
-name=barrel_very_wet
-texture=barrel
-normalMap=barrel_normal
-dispMap=barrel_disp
-specular.intensity=2
-specular.power=8.0

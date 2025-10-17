@@ -2,7 +2,14 @@ package org.drakum;
 
 import static org.lwjgl.opengl.GL46C.*;
 
-import org.barghos.math.matrix.Mat4F;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.URL;
+
+import org.barghos.api.math.matrix.IMat4RF;
+
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL20;
 
 public class Shader
 {
@@ -11,35 +18,14 @@ public class Shader
 	private int shaderProgram;
 	
 	private int matProj;
+	private int matView;
+	private int texAlbedo;
 	
-	public Shader()
+	public Shader(String vertexFile, String fragmentFile)
 	{
-		this.vertexShader = glCreateShader(GL_VERTEX_SHADER);
+		this.vertexShader = loadShader(vertexFile, GL_VERTEX_SHADER);
 		
-		String vertexShaderCode = "#version 330 core\n" +
-			    "layout (location = 0) in vec3 aPos;\n" +
-				"uniform mat4 m_proj;\n" +
-			    "void main()\n" +
-			    "{\n" +
-			    "   gl_Position = m_proj * vec4(aPos.x, aPos.y, aPos.z, 1.0);\n" +
-			    "}\0";
-		
-		glShaderSource(this.vertexShader, vertexShaderCode);
-		
-		glCompileShader(this.vertexShader);
-		
-		this.fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-		
-		String fragmentShaderCode = "#version 330 core\n" +
-			    "out vec4 FragColor;\n" +
-			    "void main()\n" +
-			    "{\n" +
-			    "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n" +
-			    "}\n\0";
-		
-		glShaderSource(this.fragmentShader, fragmentShaderCode);
-		
-		glCompileShader(this.fragmentShader);
+		this.fragmentShader = loadShader(fragmentFile, GL_FRAGMENT_SHADER);
 		
 		this.shaderProgram = glCreateProgram();
 		
@@ -49,6 +35,8 @@ public class Shader
 		glLinkProgram(this.shaderProgram);
 		
 		matProj = glGetUniformLocation(this.shaderProgram, "m_proj");
+		matView = glGetUniformLocation(this.shaderProgram, "m_view");
+		texAlbedo = glGetUniformLocation(this.shaderProgram, "albedo");
 	}
 	
 	public void start()
@@ -56,9 +44,21 @@ public class Shader
 		glUseProgram(this.shaderProgram);
 	}
 	
-	public void setProj(Mat4F m)
+	public void setProj(IMat4RF m)
 	{
 		glUniformMatrix4fv(this.matProj, false, m.toArray());
+	}
+	
+	public void setView(IMat4RF m)
+	{
+		glUniformMatrix4fv(this.matView, false, m.toArray());
+	}
+	
+	public void setTexture(Texture t)
+	{
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, t.getId());
+		glUniform1i(texAlbedo, 0);
 	}
 	
 	public void releaseResources()
@@ -67,5 +67,49 @@ public class Shader
 		
 		glDeleteShader(this.vertexShader);
 		glDeleteShader(this.fragmentShader);
+	}
+	
+	private int loadShader(String file, int type)
+	{
+		int shaderID = GL20.glCreateShader(type);
+		GL20.glShaderSource(shaderID, readShader(file));
+		GL20.glCompileShader(shaderID);
+		
+		if(GL20.glGetShaderi(shaderID,GL20.GL_COMPILE_STATUS) == GL11.GL_FALSE)
+		{
+			System.out.println(GL20.glGetShaderInfoLog(shaderID, 500));
+			System.out.println("Could not compile shader. " + file);
+			System.exit(-1);
+		}
+		
+		return shaderID;
+		
+	}
+	
+	private String readShader(String file)
+	{
+		URL url = Shader.class.getResource(file);
+		
+		StringBuilder shaderSource = new StringBuilder();
+		
+		String line;
+		
+		try
+		{
+			BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream()));
+			
+			while((line = reader.readLine()) != null)
+			{
+				shaderSource.append(line).append("\n");					
+			}
+			
+			reader.close();
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+		
+		return shaderSource.toString();
 	}
 }

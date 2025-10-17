@@ -1,5 +1,0 @@
-texture=res/materials/steelfloor.png
-normalMap=res/materials/steelfloor_normal.png
-glowMap=res/materials/black.png
-specular.intensity=0.2
-specular.power=1.0

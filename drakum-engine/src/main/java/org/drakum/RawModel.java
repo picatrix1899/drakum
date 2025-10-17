@@ -1,9 +1,6 @@
 package org.drakum;
 
-import static org.lwjgl.opengl.GL11C.GL_TRIANGLES;
-import static org.lwjgl.opengl.GL11C.GL_UNSIGNED_INT;
-import static org.lwjgl.opengl.GL11C.glDrawElements;
-import static org.lwjgl.opengl.GL20C.glEnableVertexAttribArray;
+import static org.lwjgl.opengl.GL46C.*;
 
 public class RawModel
 {
@@ -27,6 +24,7 @@ public class RawModel
 		this.vao.bind();
 		
 		glEnableVertexAttribArray(0);
+		glEnableVertexAttribArray(1);
 	}
 	
 	public void draw()

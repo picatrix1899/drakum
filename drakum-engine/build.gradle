@@ -13,9 +13,12 @@ dependencies {
   implementation "it.unimi.dsi:fastutil:$fastUtilsVersion"
   implementation 'com.google.code.gson:gson:2.13.1'
   
-  implementation "org.barghos:barghos-util:$barghosVersion"
-  implementation "org.barghos:barghos-math:$barghosVersion"
-  implementation "org.barghos:barghos-event:$barghosVersion"
+  implementation "org.barghos:barghos-core-api:$barghosVersion"
+  implementation "org.barghos:barghos-core-impl:$barghosVersion"
+  implementation "org.barghos:barghos-math-api:$barghosVersion"
+  implementation "org.barghos:barghos-math-impl:$barghosVersion"
+//  implementation "org.barghos:barghos-event:$barghosVersion"
+  implementation "org.barghos:barghos-compat-lwjgl-glfw:$barghosVersion"
   
   runtimeOnly "org.lwjgl:lwjgl::natives-windows"
   runtimeOnly "org.lwjgl:lwjgl-glfw::natives-windows"

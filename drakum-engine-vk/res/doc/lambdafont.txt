@@ -1,0 +1,16 @@
+int width
+int height
+
+<block "RGBA data">
+byte r
+byte g
+byte b
+byte a
+<end block>
+
+<block "UV texcoords">
+float u
+float v
+float w
+float a
+<end block>

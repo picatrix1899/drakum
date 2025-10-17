@@ -4,6 +4,7 @@ import static org.lwjgl.glfw.GLFWVulkan.*;
 import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK14.*;
 
+import org.barghos.glfw.window.GlfwWindow;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkDevice;
@@ -31,12 +32,12 @@ public class VknGPU
 			
 			this.physicalGpu = settings.physicalGpu;
 			
-			VknWindowShell.Settings windowCreateSettings = new VknWindowShell.Settings();
-			windowCreateSettings.width = 400;
-			windowCreateSettings.height = 400;
+			GlfwWindow.Settings windowCreateSettings = new GlfwWindow.Settings();
+			windowCreateSettings.windowWidth = 400;
+			windowCreateSettings.windowHeight = 400;
 			windowCreateSettings.title = "";
 			
-			VknWindowShell windowShell = new VknWindowShell(windowCreateSettings);
+			GlfwWindow windowShell = GlfwWindow.create(windowCreateSettings);
 			
 			VknSurface.Settings surfaceCreateSettings = new VknSurface.Settings(this.context);
 			surfaceCreateSettings.window = windowShell;
@@ -120,7 +121,7 @@ public class VknGPU
 			this.presentQueue = VknInternalUtils.getDeviceQueue(this.handle, this.queueFamilies.presentFamily, 0, stack);
 			
 			surface.close();
-			windowShell.close();
+			windowShell.releaseResources();
 		}
 	}
 	

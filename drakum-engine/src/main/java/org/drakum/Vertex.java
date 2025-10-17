@@ -1,7 +1,7 @@
 package org.drakum;
 
-import org.barghos.math.vector.Vec2F;
-import org.barghos.math.vector.Vec3F;
+import org.barghos.impl.math.vector.Vec2F;
+import org.barghos.impl.math.vector.Vec3F;
 
 public class Vertex
 {

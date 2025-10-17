@@ -1,5 +1,0 @@
-texture=res/materials/crate.png
-normalMap=res/materials/crate_normal.png
-specular.intensity=0.2
-specular.power=1.0
-glowMap=res/materials/crate_glow.png

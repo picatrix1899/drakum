@@ -2,9 +2,9 @@ package org.drakum;
 
 import static org.lwjgl.opengl.GL46C.*;
 
-import org.barghos.util.tuple.floats.ITup2RF;
-import org.barghos.util.tuple.floats.ITup3RF;
-import org.barghos.util.tuple.floats.ITup4RF;
+import org.barghos.api.core.tuple.floats.ITup2RF;
+import org.barghos.api.core.tuple.floats.ITup3RF;
+import org.barghos.api.core.tuple.floats.ITup4RF;
 
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;

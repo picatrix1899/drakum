@@ -3,6 +3,7 @@ package org.drakum.demo.vkn;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.VK14.*;
 
+import org.barghos.glfw.window.GlfwWindow;
 import org.lwjgl.system.MemoryStack;
 
 public class VknSurface
@@ -93,7 +94,7 @@ public class VknSurface
 	{
 		private final VknContext context;
 		
-		public VknWindowShell window;
+		public GlfwWindow window;
 		public VknPhysicalGPU physicalGPU;
 		
 		public Settings(VknContext context)

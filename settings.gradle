@@ -1,5 +1,6 @@
 rootProject.name = 'drakum'
 
 include('drakum-engine')
+include('drakum-engine-vk')
 
 include('drakum-demo')

@@ -89,6 +89,8 @@ public class RendererMaster
 		try (MemoryStack stack = MemoryStack.stackPush())
 		{
 			GLFWContext.init();
+			FFMImpl.init();
+			
 			CommonRenderContext.context = new VknContext();
 			CommonRenderContext.context.instance = new VknInstance(new VknInstance.Settings().applicationName("Drakum Demo").engineName("Drakum").debugMode(appSettings.debug));
 			

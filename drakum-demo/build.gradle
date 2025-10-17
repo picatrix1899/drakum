@@ -16,6 +16,7 @@ dependencies {
   implementation "org.barghos:barghos-util:$barghosVersion"
   implementation "org.barghos:barghos-math:$barghosVersion"
   implementation "org.barghos:barghos-event:$barghosVersion"
+  implementation "org.barghos:barghos-compat-lwjgl-glfw:$barghosVersion"
   
   runtimeOnly "org.lwjgl:lwjgl::natives-windows"
   runtimeOnly "org.lwjgl:lwjgl-glfw::natives-windows"
