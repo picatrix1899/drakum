@@ -1,20 +1,24 @@
 package org.drakum;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import it.unimi.dsi.fastutil.ints.Int2IntMap;
+import it.unimi.dsi.fastutil.ints.IntSet;
 
 public class InputKeyboard
 {
-	private Map<Integer,Action> lastState = new HashMap<>();
-	private Map<Integer,Action> currentState = new HashMap<>();
-	private Set<Integer> keys = new HashSet<>();
+	public static final int ACTION_RELEASED = 0;
+	public static final int ACTION_PRESSED = 1;
+	public static final int ACTION_REPEATED = 2;
+	
+	private Int2IntMap lastState = new Int2IntOpenHashMap();
+	private Int2IntMap currentState = new Int2IntOpenHashMap();
+	private IntSet keys = new IntOpenHashSet();
 	
 	private String lastCharacter;
 	private boolean trackCharacter;
 	
-	public void sendKeyAction(int key, Action action)
+	public void sendKeyAction(int key, int action)
 	{
 		keys.add(key);
 		currentState.put(key, action);
@@ -27,11 +31,11 @@ public class InputKeyboard
 		this.lastCharacter = character;
 	}
 	
-	public void preTick()
+	public void preUpdate()
 	{
 		for(int key : keys)
 		{
-			Action current = currentState.getOrDefault(key, Action.RELEASED);
+			int current = currentState.getOrDefault(key, ACTION_RELEASED);
 			lastState.put(key, current);
 		}
 		
@@ -56,49 +60,42 @@ public class InputKeyboard
 	
 	public boolean isKeyPressed(int key)
 	{
-		Action last = lastState.getOrDefault(key, Action.RELEASED);
-		Action current = currentState.getOrDefault(key, Action.RELEASED);
+		int last = lastState.getOrDefault(key, ACTION_RELEASED);
+		int current = currentState.getOrDefault(key, ACTION_RELEASED);
 		
-		return last == Action.RELEASED && current == Action.PRESSED;
+		return last == ACTION_RELEASED && current == ACTION_PRESSED;
 	}
 	
 	public boolean isKeyHeld(int key)
 	{
-		Action last = lastState.getOrDefault(key, Action.RELEASED);
-		Action current = currentState.getOrDefault(key, Action.RELEASED);
+		int last = lastState.getOrDefault(key, ACTION_RELEASED);
+		int current = currentState.getOrDefault(key, ACTION_RELEASED);
 		
-		return (last == Action.RELEASED && current == Action.PRESSED) || (last != Action.RELEASED && current != Action.RELEASED);
+		return (last == ACTION_RELEASED && current == ACTION_PRESSED) || (last != ACTION_RELEASED && current != ACTION_RELEASED);
 	}
 	
 	public boolean isKeyPressedOrRepeated(int key)
 	{
-		Action last = lastState.getOrDefault(key, Action.RELEASED);
-		Action current = currentState.getOrDefault(key, Action.RELEASED);
+		int last = lastState.getOrDefault(key, ACTION_RELEASED);
+		int current = currentState.getOrDefault(key, ACTION_RELEASED);
 		
-		return (last == Action.RELEASED && current == Action.PRESSED) || (last != Action.RELEASED && current == Action.REPEATED);
+		return (last == ACTION_RELEASED && current == ACTION_PRESSED) || (last != ACTION_RELEASED && current == ACTION_REPEATED);
 	}
 	
 	public boolean isKeyRepeated(int key)
 	{
-		Action last = lastState.getOrDefault(key, Action.RELEASED);
-		Action current = currentState.getOrDefault(key, Action.RELEASED);
+		int last = lastState.getOrDefault(key, ACTION_RELEASED);
+		int current = currentState.getOrDefault(key, ACTION_RELEASED);
 		
-		return last != Action.RELEASED && current == Action.PRESSED;
+		return last != ACTION_RELEASED && current == ACTION_PRESSED;
 	}
 	
 	public boolean isKeyReleased(int key)
 	{
-		Action last = lastState.getOrDefault(key, Action.RELEASED);
-		Action current = currentState.getOrDefault(key, Action.RELEASED);
+		int last = lastState.getOrDefault(key, ACTION_RELEASED);
+		int current = currentState.getOrDefault(key, ACTION_RELEASED);
 		
-		return last != Action.RELEASED && current == Action.RELEASED;
+		return last != ACTION_RELEASED && current == ACTION_RELEASED;
 	}
-	
-	public static enum Action
-	{
-		RELEASED,
-		PRESSED,
-		REPEATED
-		;
-	}
+
 }

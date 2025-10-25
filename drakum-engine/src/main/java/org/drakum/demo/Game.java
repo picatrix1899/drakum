@@ -4,6 +4,7 @@ import static org.lwjgl.glfw.GLFW.*;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import org.barghos.api.core.math.MathUtils;
 import org.barghos.glfw.window.GlfwWindow;
 import org.barghos.impl.math.vector.Vec3F;
 import org.drakum.Camera;
@@ -20,7 +21,12 @@ import org.drakum.Texture;
 import org.drakum.TextureData;
 import org.drakum.TextureLoader;
 import org.drakum.TextureUtils;
-import org.drakum.Viewport3F;
+import org.drakum.anim.AnimatedModel;
+import org.drakum.anim.Animator;
+import org.drakum.anim.AssimpLoader;
+import org.drakum.anim.Bone;
+import org.drakum.anim.EmKp;
+import org.drakum.anim.SkinnedMesh;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GLDebugMessageCallback;
 
@@ -40,6 +46,12 @@ public class Game implements IEngineRoutine
 	
 	private InputKeyboard inputKeyboard;
 	private InputMouse inputMouse;
+	
+	private AnimatedModel animModel;
+	private Animator animator;
+	private EmKp emkp;
+	private Shader2 shader2;
+	
 	
 	public Game()
 	{
@@ -76,10 +88,10 @@ public class Game implements IEngineRoutine
 		glfwSetKeyCallback(window.handle(), (_, key, scancode, action, _) -> {
 			int keyboardKey = key != GLFW_KEY_UNKNOWN ? key : 1000 + scancode;
 
-			InputKeyboard.Action keyboardAction = switch(action) {
-				case GLFW_PRESS -> InputKeyboard.Action.PRESSED;
-				case GLFW_REPEAT -> InputKeyboard.Action.REPEATED;
-				default -> InputKeyboard.Action.RELEASED;
+			int keyboardAction = switch(action) {
+				case GLFW_PRESS -> InputKeyboard.ACTION_PRESSED;
+				case GLFW_REPEAT -> InputKeyboard.ACTION_REPEATED;
+				default -> InputKeyboard.ACTION_RELEASED;
 			};
 			
 			this.inputKeyboard.sendKeyAction(keyboardKey, keyboardAction);
@@ -127,12 +139,13 @@ public class Game implements IEngineRoutine
 		window.onCloseCallback(this::stop);
 		window.onFramebufferResizeCallback((_, _, w, h) -> {
 			glViewport(0, 0, w, h);
-			camera.viewport(new Viewport3F(0, 0, 0.1f, w, h, 1000));
+			camera.projection.set(70.0f * MathUtils.DEG_TO_RADf, w / h, 0.1f, 1000);
 		});
 		
 		shader = new Shader("/resources/testShader.vs", "/resources/testShader.fs");
 		
-		camera = new Camera(new Vec3F(0, 1.9f, 2), new Viewport3F(0, 0, 0.1f, 800, 600, 1000));
+		camera = new Camera(new Vec3F(0, 1.9f, 2));
+		camera.projection.set(70.0f * MathUtils.DEG_TO_RADf, (float)this.window.windowAspectRatio(), 0.1f, 1000);
 		
 		OBJFile obj = new OBJFile();
 		obj.load("/res/models/crate_resized_meter.obj");
@@ -145,24 +158,40 @@ public class Game implements IEngineRoutine
 		TextureData textureData = TextureLoader.loadTexture("/res/materials/crate.png");
 		this.texture = TextureUtils.genTexture(textureData);
 		
+		animModel = AssimpLoader.load("/res/Only_Spider_with_Animations_Export.dae");
+		animator = animModel.createAnimator(0);
+		emkp = new EmKp();
+		emkp.createSSBO(animModel.bones.size());
+		shader2 = new Shader2("/resources/testShader2.vs", "/resources/testShader2.fs");
+
 		glCullFace(GL_BACK);
 		glEnable(GL_DEPTH_TEST);
 		glEnable(GL_CULL_FACE);
 		
 		window.show();
+		
+		currentTime = System.nanoTime();
 	}
 	
 	@Override
 	public void preTick()
 	{
-		inputKeyboard.preTick();
+		lastTime = currentTime;
+		currentTime = System.nanoTime();
+		delta = currentTime - lastTime;
+		
+		inputKeyboard.preUpdate();
 		
 		glfwPollEvents();
 	}
 	
+	public long lastTime;
+	public long currentTime;
+	public float delta;
+	
 	@Override
 	public void tick()
-	{
+	{	
 		if(inputKeyboard.isKeyHeld(GLFW_KEY_ESCAPE))
 		{
 			stop();
@@ -172,50 +201,53 @@ public class Game implements IEngineRoutine
 		
 		if(inputKeyboard.isKeyHeld(GLFW_KEY_W))
 		{
-			velocity.add(this.camera.forward().nrm());
+			velocity.add(this.camera.forward().normalize());
 		}
 		
 		if(inputKeyboard.isKeyHeld(GLFW_KEY_A))
 		{
-			velocity.add(this.camera.right().neg().nrm());
+			velocity.add(this.camera.right().negate().normalize());
 		}
 		
 		if(inputKeyboard.isKeyHeld(GLFW_KEY_S))
 		{
-			velocity.add(this.camera.forward().neg().nrm());
+			velocity.add(this.camera.forward().negate().normalize());
 		}
 		
 		if(inputKeyboard.isKeyHeld(GLFW_KEY_D))
 		{
-			velocity.add(this.camera.right().nrm());
+			velocity.add(this.camera.right().normalize());
 		}
 		
-		velocity.nrm();
+		velocity.normalize();
 		
 		velocity.mul(0.1f);
 		
-		camera.pos.add(velocity);
+		camera.move(velocity);
 		
 		double[] adx = new double[1]; 
 		double[] ady = new double[1]; 
 		glfwGetCursorPos(this.window.handle(), adx, ady);
 		
-		double cx =  this.window.windowWidth() * 0.5;
-		double cy =  this.window.windowHeight() * 0.5;
+		float cx =  this.window.windowWidth() * 0.5f;
+		float cy =  this.window.windowHeight() * 0.5f;
 		
-		double dx = adx[0];
-		double dy = ady[0];
+		float dx = (float)adx[0];
+		float dy = (float)ady[0];
 		
-		double fx = dx - cx;
-		double fy = dy - cy;
+		float fx = dx - cx;
+		float fy = dy - cy;
 		
-		fx *= -0.002;
-		fy *= -0.002;
+		fx *= -0.002f;
+		fy *= -0.002f;
 		
 		glfwSetCursorPos(this.window.handle(), cx, cy);
+
+		this.camera.rotate(fy, fx, 0.0f);
 		
-		this.camera.yaw += fx;
-		this.camera.pitch += fy;
+		this.animator.update(delta / 1000000000l);
+		
+		emkp.updateSSBO(this.animModel.bones);
 	}
 	
 	@Override
@@ -229,13 +261,20 @@ public class Game implements IEngineRoutine
 	@Override
 	public void render()
 	{
-		shader.start();
-		shader.setProj(camera.projectionMatrix());
-		shader.setView(camera.viewMatrix());
-		shader.setTexture(texture);
+//		shader.start();
+//		camera.projection.uploadToShader(shader);
+//		shader.setView(camera.viewMatrix());
+//		shader.setTexture(texture);
+//		
+//		this.rawModel.bind();
+//		this.rawModel.draw();
 		
-		this.rawModel.bind();
-		this.rawModel.draw();
+		shader2.start();
+		camera.projection.uploadToShader(shader2);
+		shader2.setView(camera.viewMatrix());
+		
+		for (SkinnedMesh mesh : animModel.meshes)
+			mesh.draw();
 	}
 	
 	@Override
