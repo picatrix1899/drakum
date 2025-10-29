@@ -1,7 +1,6 @@
 package org.drakum;
 
 import org.barghos.impl.math.matrix.Mat4F;
-import org.drakum.demo.Shader2;
 
 public class PerspectiveProjection
 {
@@ -14,11 +13,6 @@ public class PerspectiveProjection
 	
 	public void uploadToShader(Shader shader)
 	{
-		shader.setProj(proj);
-	}
-	
-	public void uploadToShader(Shader2 shader)
-	{
-		shader.setProj(proj);
+		shader.setMat4f("m_proj", proj);
 	}
 }

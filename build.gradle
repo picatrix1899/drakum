@@ -84,7 +84,7 @@ subprojects {
     jdt {
       sourceCompatibility = "$targetJavaVersion"
       targetCompatibility = "$targetJavaVersion"
-      javaRuntimeName = 'JavaSE-23'
+      javaRuntimeName = 'JavaSE-24'
     }
   
     classpath {

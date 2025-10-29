@@ -1,5 +1,7 @@
 package org.drakum;
 
+import static org.lwjgl.opengl.GL20C.glGetUniformLocation;
+import static org.lwjgl.opengl.GL20C.glUniformMatrix4fv;
 import static org.lwjgl.opengl.GL46C.*;
 
 import java.io.BufferedReader;
@@ -11,32 +13,45 @@ import org.barghos.api.math.matrix.IMat4RF;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
 
+import it.unimi.dsi.fastutil.ints.Int2IntArrayMap;
+import it.unimi.dsi.fastutil.ints.Int2IntMap;
+
 public class Shader
 {
-	private int vertexShader;
-	private int fragmentShader;
 	private int shaderProgram;
 	
-	private int matProj;
-	private int matView;
-	private int texAlbedo;
+	private Int2IntMap shaders = new Int2IntArrayMap();
 	
-	public Shader(String vertexFile, String fragmentFile)
+	public Shader()
 	{
-		this.vertexShader = loadShader(vertexFile, GL_VERTEX_SHADER);
-		
-		this.fragmentShader = loadShader(fragmentFile, GL_FRAGMENT_SHADER);
-		
 		this.shaderProgram = glCreateProgram();
+	}
+	
+	public void vertexShader(String file)
+	{
+		if(this.shaders.containsKey(GL_VERTEX_SHADER)) throw new RuntimeException("Shader slot already occupied.");
 		
-		glAttachShader(this.shaderProgram, this.vertexShader);
-		glAttachShader(this.shaderProgram, this.fragmentShader);
+		int shader = loadShader(file, GL_VERTEX_SHADER);
 		
+		glAttachShader(this.shaderProgram, shader);
+		
+		this.shaders.put(GL_VERTEX_SHADER, shader);
+	}
+	
+	public void fragmentShader(String file)
+	{
+		if(this.shaders.containsKey(GL_FRAGMENT_SHADER)) throw new RuntimeException("Shader slot already occupied.");
+		
+		int shader = loadShader(file, GL_FRAGMENT_SHADER);
+		
+		glAttachShader(this.shaderProgram, shader);
+		
+		this.shaders.put(GL_FRAGMENT_SHADER, shader);
+	}
+	
+	public void link()
+	{
 		glLinkProgram(this.shaderProgram);
-		
-		matProj = glGetUniformLocation(this.shaderProgram, "m_proj");
-		matView = glGetUniformLocation(this.shaderProgram, "m_view");
-		texAlbedo = glGetUniformLocation(this.shaderProgram, "albedo");
 	}
 	
 	public void start()
@@ -44,29 +59,28 @@ public class Shader
 		glUseProgram(this.shaderProgram);
 	}
 	
-	public void setProj(IMat4RF m)
+	public void setMat4f(String name, IMat4RF m)
 	{
-		glUniformMatrix4fv(this.matProj, false, m.toArray());
+		int location = glGetUniformLocation(this.shaderProgram, name);
+		glUniformMatrix4fv(location, false, m.toArray());
 	}
 	
-	public void setView(IMat4RF m)
+	public void setTexture(String name, Texture t)
 	{
-		glUniformMatrix4fv(this.matView, false, m.toArray());
-	}
-	
-	public void setTexture(Texture t)
-	{
+		int location = glGetUniformLocation(this.shaderProgram, name);
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, t.getId());
-		glUniform1i(texAlbedo, 0);
+		glUniform1i(location, 0);
 	}
 	
 	public void releaseResources()
 	{
 		glDeleteProgram(this.shaderProgram);
-		
-		glDeleteShader(this.vertexShader);
-		glDeleteShader(this.fragmentShader);
+
+		for(int shader : this.shaders.values())
+		{
+			glDeleteShader(shader);
+		}
 	}
 	
 	private int loadShader(String file, int type)

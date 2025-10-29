@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.drakum.Shader;
+import org.drakum.model.AnimatedModel;
+import org.drakum.model.SkinnedMesh;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -84,10 +86,6 @@ public class AssimpLoader
 
 			List<Animation> anims = parseAnimations(scene);
 			List<SkinnedMesh> meshes = loadMeshes(scene, boneByName);
-
-			// GPU-Upload
-			for (SkinnedMesh mesh : meshes)
-				mesh.uploadToGPU(mesh.positions, mesh.normals, mesh.texcoords, mesh.boneIds, mesh.weights, mesh.indices);
 
 			return new AnimatedModel(root, bones, boneByName, anims, meshes);
 		} catch (Exception e)

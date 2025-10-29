@@ -1,7 +1,12 @@
-package org.drakum.anim;
+package org.drakum.model;
 
 import java.util.List;
 import java.util.Map;
+
+import org.drakum.anim.Animation;
+import org.drakum.anim.Animator;
+import org.drakum.anim.Bone;
+import org.drakum.anim.Node;
 
 public class AnimatedModel
 {
@@ -23,5 +28,13 @@ public class AnimatedModel
 	public Animator createAnimator(int animationIndex)
 	{
 		return new Animator(root, animations.get(animationIndex), boneByName);
+	}
+	
+	public void releaseResources()
+	{
+		for(SkinnedMesh mesh : this.meshes)
+		{
+			mesh.releaseResources();
+		}
 	}
 }
