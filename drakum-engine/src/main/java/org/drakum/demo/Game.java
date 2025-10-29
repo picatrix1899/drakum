@@ -7,13 +7,8 @@ import org.barghos.api.core.math.MathUtils;
 import org.barghos.glfw.window.GlfwWindow;
 import org.barghos.impl.math.vector.Vec3F;
 import org.drakum.Camera;
-import org.drakum.Engine;
-import org.drakum.IEngineRoutine;
-import org.drakum.InputKeyboard;
-import org.drakum.InputMouse;
 import org.drakum.OBJFile;
 import org.drakum.Shader;
-import org.drakum.SimpleEngineLoop;
 import org.drakum.Texture;
 import org.drakum.TextureData;
 import org.drakum.TextureLoader;
@@ -22,10 +17,16 @@ import org.drakum.anim.Animator;
 import org.drakum.anim.AssimpLoader;
 import org.drakum.anim.EmKp;
 import org.drakum.boilerplate.FFMGL;
+import org.drakum.engine.Engine;
+import org.drakum.engine.FixedTimestepEngineLoop;
+import org.drakum.engine.IEngineRoutine;
+import org.drakum.engine.SimpleEngineLoop;
 import org.drakum.entity.Entity;
 import org.drakum.entity.EntityTemplateStaticModel;
 import org.drakum.entity.IEntityTemplate;
 import org.drakum.entity.ITexturedModelProvider;
+import org.drakum.input.InputKeyboard;
+import org.drakum.input.InputMouse;
 import org.drakum.model.AnimatedModel;
 import org.drakum.model.ConstMesh;
 import org.drakum.model.RawModel;
@@ -86,7 +87,7 @@ public class Game implements IEngineRoutine
 	}
 
 	@Override
-	public void preInit()
+	public void earlyInit()
 	{
 		GlfwWindow.Settings windowSettings = new GlfwWindow.Settings();
 		windowSettings.title = "Drakum Demo";
@@ -175,14 +176,14 @@ public class Game implements IEngineRoutine
 		shader2 = new TestShader2();
 
 		entity = this.entityTemplate.createEntity();
-		entity.transform.scale.set(1, 1, 1);
-		entity.transform.rot.setFromAxisAngle(0, 1, 0, 20 * MathUtils.DEG_TO_RADf);
-		entity.transform.pos.set(-5, 0, 0);
+		entity.localTransform.scale.set(1, 1, 1);
+		entity.localTransform.rot.setFromAxisAngle(0, 1, 0, 20 * MathUtils.DEG_TO_RADf);
+		entity.localTransform.pos.set(-5, 0, 0);
 		
 		this.world.add(entity);
 		
 		entity2 = this.entityTemplate.createEntity();
-		entity2.transform.scale.set(0.5f, 0.5f, 0.5f);
+		entity2.localTransform.scale.set(0.5f, 0.5f, 0.5f);
 		
 		this.world.add(entity2);
 		
@@ -216,7 +217,7 @@ public class Game implements IEngineRoutine
 	}
 	
 	@Override
-	public void preTick()
+	public void earlyUpdate()
 	{
 		lastTime = currentTime;
 		currentTime = System.nanoTime();
@@ -232,7 +233,7 @@ public class Game implements IEngineRoutine
 	public float delta;
 
 	@Override
-	public void tick()
+	public void update()
 	{
 		if(inputKeyboard.isKeyHeld(GLFW_KEY_ESCAPE))
 		{
@@ -293,7 +294,7 @@ public class Game implements IEngineRoutine
 	}
 
 	@Override
-	public void preRender()
+	public void earlyRender()
 	{
 		glClearColor(0, 0, 0, 1);
 
@@ -362,7 +363,7 @@ public class Game implements IEngineRoutine
 	}
 
 	@Override
-	public void postRender()
+	public void lateRender()
 	{
 		window.swapBuffers();
 	}

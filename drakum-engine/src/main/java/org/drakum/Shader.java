@@ -1,7 +1,4 @@
 package org.drakum;
-
-import static org.lwjgl.opengl.GL20C.glGetUniformLocation;
-import static org.lwjgl.opengl.GL20C.glUniformMatrix4fv;
 import static org.lwjgl.opengl.GL46C.*;
 
 import java.io.BufferedReader;
@@ -18,9 +15,8 @@ import it.unimi.dsi.fastutil.ints.Int2IntMap;
 
 public class Shader
 {
-	private int shaderProgram;
-	
-	private Int2IntMap shaders = new Int2IntArrayMap();
+	private final int shaderProgram;
+	private final Int2IntMap shaders = new Int2IntArrayMap();
 	
 	public Shader()
 	{
@@ -57,6 +53,11 @@ public class Shader
 	public void start()
 	{
 		glUseProgram(this.shaderProgram);
+	}
+	
+	public void stop()
+	{
+		glUseProgram(0);
 	}
 	
 	public void setMat4f(String name, IMat4RF m)

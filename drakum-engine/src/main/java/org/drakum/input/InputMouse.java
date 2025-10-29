@@ -1,4 +1,4 @@
-package org.drakum;
+package org.drakum.input;
 
 import static org.lwjgl.glfw.GLFW.*;
 

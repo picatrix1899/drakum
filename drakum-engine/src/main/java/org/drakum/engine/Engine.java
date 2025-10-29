@@ -1,4 +1,4 @@
-package org.drakum;
+package org.drakum.engine;
 
 import static org.lwjgl.glfw.GLFW.*;
 
@@ -45,19 +45,23 @@ public class Engine
 		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 		glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 		
-		this.routine.preInit();
+		this.routine.earlyInit();
 		this.routine.init();
-		this.routine.postInit();
+		this.routine.lateInit();
 	}
 	
 	public void run()
 	{
 		init();
 		
+		this.loop.init();
+		
 		while(this.isRunning)
 		{
 			this.loop.cycle();
 		}
+		
+		this.loop.releaseResources();
 		
 		releaseResources();
 	}

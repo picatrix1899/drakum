@@ -1,4 +1,4 @@
-package org.drakum;
+package org.drakum.input;
 
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;

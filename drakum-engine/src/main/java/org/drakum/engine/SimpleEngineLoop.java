@@ -1,4 +1,4 @@
-package org.drakum;
+package org.drakum.engine;
 
 public class SimpleEngineLoop implements IEngineLoop
 {
@@ -14,13 +14,25 @@ public class SimpleEngineLoop implements IEngineLoop
 	@Override
 	public void cycle()
 	{
-		routine.preTick();
-		routine.tick();
-		routine.postTick();
+		routine.earlyUpdate();
+		routine.update();
+		routine.lateUpdate();
 		
-		routine.preRender();
+		routine.earlyRender();
 		routine.render();
-		routine.postRender();
+		routine.lateRender();
+	}
+
+	@Override
+	public void init()
+	{
+		
+	}
+
+	@Override
+	public void releaseResources()
+	{
+		
 	}
 
 }
