@@ -5,10 +5,9 @@ import java.lang.foreign.MemorySegment;
 
 import java.util.List;
 
+import org.barghos.api.math.vector.floats.MemVecOpsI3F;
 import org.barghos.impl.core.collection.ArrayUtils;
-
-import static org.barghos.api.core.tuple.floats.IOOpsMem2FAligned.*;
-import static org.barghos.api.core.tuple.floats.IOOpsITupMem3FAligned.*;
+import org.barghos.math.vector.floats.MemVecOps2F;
 
 import org.drakum.OBJFile;
 import org.drakum.Vertex;
@@ -49,10 +48,10 @@ public class ConstMesh
 		
 				int base = i * 64;
 				
-				tup_writeBlock16T_3fa(vertex.pos, mem, base + 0l);
-				tup_writeBlock16T_2fa(vertex.uv.v0(), -vertex.uv.v1(), mem, base + 16l);
-				tup_writeBlock16T_3fa(vertex.normal, mem, base + 32l);
-				tup_writeBlock16T_3fa(vertex.tangent, mem, base + 48l);
+				MemVecOpsI3F.writeBlock16(vertex.pos, mem, base + 0l);
+				MemVecOps2F.writeBlock16(vertex.uv.x(), -vertex.uv.y(), mem, base + 16l);
+				MemVecOpsI3F.writeBlock16(vertex.normal, mem, base + 32l);
+				MemVecOpsI3F.writeBlock16(vertex.tangent, mem, base + 48l);
 			}
 
 			staging.unmap();

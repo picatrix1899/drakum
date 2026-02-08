@@ -1,5 +1,6 @@
 package org.drakum;
 
+import org.barghos.api.math.matrix.DefaultMatsI4F;
 import org.barghos.impl.math.matrix.Mat4F;
 
 public class PerspectiveProjection
@@ -8,7 +9,7 @@ public class PerspectiveProjection
 	
 	public void set(float fovY, float aspect, float near, float far)
 	{
-		this.proj.setPerspective(fovY, aspect, near, far);
+		DefaultMatsI4F.perspectiveProjectionDeg(fovY, aspect, near, far, proj);
 	}
 	
 	public void uploadToShader(Shader shader)

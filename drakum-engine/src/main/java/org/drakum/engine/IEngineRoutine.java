@@ -10,9 +10,9 @@ public interface IEngineRoutine
 	default void update() { }
 	default void lateUpdate() { }
 	
-	default void earlyRender() { }
-	default void render() { }
-	default void lateRender() { }
+	default void earlyRender(float alpha) { }
+	default void render(float alpha) { }
+	default void lateRender(float alpha) { }
 	
 	default void releaseResources() { }
 }

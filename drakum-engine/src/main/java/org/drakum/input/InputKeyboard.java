@@ -1,27 +1,36 @@
 package org.drakum.input;
 
-import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
-import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
-import it.unimi.dsi.fastutil.ints.Int2IntMap;
-import it.unimi.dsi.fastutil.ints.IntSet;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.barghos.hid.HidInputKey;
+import org.barghos.hid.HidInputState;
+import org.barghos.hid.HidManager;
+
+import it.unimi.dsi.fastutil.objects.Object2FloatMap;
+import it.unimi.dsi.fastutil.objects.Object2FloatOpenHashMap;
 
 public class InputKeyboard
 {
-	public static final int ACTION_RELEASED = 0;
-	public static final int ACTION_PRESSED = 1;
-	public static final int ACTION_REPEATED = 2;
-	
-	private Int2IntMap lastState = new Int2IntOpenHashMap();
-	private Int2IntMap currentState = new Int2IntOpenHashMap();
-	private IntSet keys = new IntOpenHashSet();
+	private Object2FloatMap<HidInputKey> lastState = new Object2FloatOpenHashMap<>();
+	private Object2FloatMap<HidInputKey> currentState = new Object2FloatOpenHashMap<>();
+	private Set<HidInputKey> keys = new HashSet<>();
 	
 	private String lastCharacter;
 	private boolean trackCharacter;
 	
-	public void sendKeyAction(int key, int action)
+	public HidManager hidManager;
+	
+	public void addKey(HidInputKey key)
 	{
 		keys.add(key);
-		currentState.put(key, action);
+	}
+	
+	public void addGlfwKey(int key)
+	{
+		HidInputKey hidKey = new HidInputKey(0, key);
+		
+		keys.add(hidKey);
 	}
 	
 	public void sendCharEntered(String character)
@@ -31,15 +40,22 @@ public class InputKeyboard
 		this.lastCharacter = character;
 	}
 	
-	public void preUpdate()
+	public void update()
 	{
-		for(int key : keys)
+		for(HidInputKey key : keys)
 		{
-			int current = currentState.getOrDefault(key, ACTION_RELEASED);
+			float current = currentState.getOrDefault(key, 0.0f);
 			lastState.put(key, current);
 		}
 		
 		lastCharacter = null;
+		
+		for(HidInputKey key : keys)
+		{
+			HidInputState state = hidManager.getState(key);
+
+			this.currentState.put(key, state == null ? 0.0f : state.value);
+		}
 	}
 	
 	public void trackCharacter(boolean trackCharacter)
@@ -58,44 +74,34 @@ public class InputKeyboard
 		return this.lastCharacter;
 	}
 	
-	public boolean isKeyPressed(int key)
-	{
-		int last = lastState.getOrDefault(key, ACTION_RELEASED);
-		int current = currentState.getOrDefault(key, ACTION_RELEASED);
+	public boolean isKeyPressed(HidInputKey key)
+	{	
+		if(!keys.contains(key)) return false;
 		
-		return last == ACTION_RELEASED && current == ACTION_PRESSED;
+		float last = lastState.getOrDefault(key, 0.0f);
+		float current = currentState.getOrDefault(key, 0.0f);
+		
+		return last == 0.0f && current != 0.0f;
 	}
 	
-	public boolean isKeyHeld(int key)
+	public boolean isKeyHeld(HidInputKey key)
 	{
-		int last = lastState.getOrDefault(key, ACTION_RELEASED);
-		int current = currentState.getOrDefault(key, ACTION_RELEASED);
+		if(!keys.contains(key)) return false;
 		
-		return (last == ACTION_RELEASED && current == ACTION_PRESSED) || (last != ACTION_RELEASED && current != ACTION_RELEASED);
+		float last = lastState.getOrDefault(key, 0.0f);
+		float current = currentState.getOrDefault(key, 0.0f);
+		
+		return (last == 0.0f && current != 0.0f) || (last != 0.0f && current != 0.0f);
 	}
 	
-	public boolean isKeyPressedOrRepeated(int key)
+	public boolean isKeyReleased(HidInputKey key)
 	{
-		int last = lastState.getOrDefault(key, ACTION_RELEASED);
-		int current = currentState.getOrDefault(key, ACTION_RELEASED);
+		if(!keys.contains(key)) return false;
 		
-		return (last == ACTION_RELEASED && current == ACTION_PRESSED) || (last != ACTION_RELEASED && current == ACTION_REPEATED);
-	}
-	
-	public boolean isKeyRepeated(int key)
-	{
-		int last = lastState.getOrDefault(key, ACTION_RELEASED);
-		int current = currentState.getOrDefault(key, ACTION_RELEASED);
+		float last = lastState.getOrDefault(key, 0.0f);
+		float current = currentState.getOrDefault(key, 0.0f);
 		
-		return last != ACTION_RELEASED && current == ACTION_PRESSED;
-	}
-	
-	public boolean isKeyReleased(int key)
-	{
-		int last = lastState.getOrDefault(key, ACTION_RELEASED);
-		int current = currentState.getOrDefault(key, ACTION_RELEASED);
-		
-		return last != ACTION_RELEASED && current == ACTION_RELEASED;
+		return last != 0.0f && current == 0.0f;
 	}
 
 }

@@ -6,6 +6,8 @@ import java.io.FileReader;
 import java.net.URL;
 import java.util.ArrayList;
 
+import org.barghos.api.math.vector.floats.BaseVecOpsI2F;
+import org.barghos.api.math.vector.floats.BaseVecOpsI3F;
 import org.barghos.impl.math.vector.Vec2F;
 import org.barghos.impl.math.vector.Vec3F;
 
@@ -103,25 +105,26 @@ public class OBJFile
 	
 	private void calculateTangents(Vertex a, Vertex b, Vertex c)
 	{
-		Vec3F deltaPos1 = b.pos.subN(a.pos);
-		Vec3F deltaPos2 = c.pos.subN(a.pos);
+		Vec3F deltaPos1 = BaseVecOpsI3F.sub(b.pos, a.pos, new Vec3F());
+		Vec3F deltaPos2 = BaseVecOpsI3F.sub(c.pos, a.pos, new Vec3F());
 		
 		Vec2F uv0 = a.uv;
 		Vec2F uv1 = b.uv;
 		Vec2F uv2 = c.uv;
 		
-		Vec2F deltaUv1 = uv1.subN(uv0);
-		Vec2F deltaUv2 = uv2.subN(uv0);
+		Vec2F deltaUv1 = BaseVecOpsI2F.sub(uv1, uv0, new Vec2F());
+		Vec2F deltaUv2 = BaseVecOpsI2F.sub(uv2, uv0, new Vec2F());
 
 		float r = 1.0f / (deltaUv1.x() * deltaUv2.y() - deltaUv1.y() * deltaUv2.x());
-		deltaPos1.mul(deltaUv2.y());
-		deltaPos2.mul(deltaUv1.y());
-		Vec3F tangent = deltaPos1.subN(deltaPos2);
-		tangent.mul(r);
+		BaseVecOpsI3F.mul(deltaPos1, deltaUv2.y(), deltaPos1);
+		BaseVecOpsI3F.mul(deltaPos2, deltaUv1.y(), deltaPos2);
 		
-		a.tangent.add(tangent);
-		b.tangent.add(tangent);
-		c.tangent.add(tangent);
+		Vec3F tangent = BaseVecOpsI3F.sub(deltaPos1, deltaPos2, new Vec3F());
+		BaseVecOpsI3F.mul(tangent, r, tangent);
+		
+		BaseVecOpsI3F.add(a.tangent, tangent, a.tangent);
+		BaseVecOpsI3F.add(b.tangent, tangent, b.tangent);
+		BaseVecOpsI3F.add(c.tangent, tangent, c.tangent);
 	}
 	
 }

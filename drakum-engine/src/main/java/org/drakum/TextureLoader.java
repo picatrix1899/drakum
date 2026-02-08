@@ -41,8 +41,6 @@ public class TextureLoader
 		}
 		catch (IOException e)
 		{
-			System.out.println("test");
-			
 			e.printStackTrace();
 		}
 		

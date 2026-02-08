@@ -3,10 +3,12 @@ package org.drakum.demo;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.barghos.api.core.math.MathUtils;
+import org.barghos.api.math.quaternion.DefaultQuatsIF;
+import org.barghos.core.math.MathUtils;
 import org.barghos.glfw.window.GlfwWindow;
-import org.barghos.impl.math.vector.Vec3F;
-import org.drakum.Camera;
+import org.barghos.hid.HidManager;
+import org.barghos.impl.math.quaternion.QuatF;
+import org.drakum.Material;
 import org.drakum.OBJFile;
 import org.drakum.Shader;
 import org.drakum.Texture;
@@ -20,21 +22,20 @@ import org.drakum.boilerplate.FFMGL;
 import org.drakum.engine.Engine;
 import org.drakum.engine.FixedTimestepEngineLoop;
 import org.drakum.engine.IEngineRoutine;
-import org.drakum.engine.SimpleEngineLoop;
 import org.drakum.entity.Entity;
 import org.drakum.entity.EntityTemplateStaticModel;
 import org.drakum.entity.IEntityTemplate;
 import org.drakum.entity.ITexturedModelProvider;
+import org.drakum.hid.GlfwHidPhantomDevice;
+import org.drakum.hid.GlfwKeyboardHidDevice;
+import org.drakum.hid.HidKeys;
 import org.drakum.input.InputKeyboard;
-import org.drakum.input.InputMouse;
 import org.drakum.model.AnimatedModel;
 import org.drakum.model.ConstMesh;
 import org.drakum.model.RawModel;
 import org.drakum.model.SkinnedMesh;
 import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.opengl.GL.*;
 import static org.lwjgl.opengl.GL43C.*;
-import org.lwjgl.opengl.GLDebugMessageCallback;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -45,16 +46,13 @@ public class Game implements IEngineRoutine
 
 	private Shader shader;
 
-	private GlfwWindow window;
-
 	private RawModel rawModel;
-	
-	private Camera camera;
 
+	private Material material;
+	
 	private Texture texture;
 
 	private InputKeyboard inputKeyboard;
-	private InputMouse inputMouse;
 
 	private AnimatedModel animModel;
 	private Animator animator;
@@ -65,14 +63,23 @@ public class Game implements IEngineRoutine
 	private Entity entity2;
 	private EntityTemplateStaticModel entityTemplate;
 	
+	private Player player;
+	
 	private List<Entity> world = new ArrayList<>();
+	
+	public static int UPS = 40;
+	
+	private HidManager hidManager;
+	
+	private GuiRenderer guiRenderer;
 	
 	public Game()
 	{
 		Engine engine = new Engine();
-		engine.setLoop(new SimpleEngineLoop());
+		engine.setLoop(new FixedTimestepEngineLoop(UPS));
 		engine.setRoutine(this);
-
+		engine.setDebug(true);
+		
 		Game.engine = engine;
 	}
 
@@ -95,17 +102,28 @@ public class Game implements IEngineRoutine
 		windowSettings.windowWidth = 800;
 		windowSettings.windowHeight = 600;
 
-		window = GlfwWindow.create(windowSettings);
-
+		GlfwWindow window = GlfwWindow.create(windowSettings);
+		
+		engine.setWindow(window);
+		
+		this.hidManager = new HidManager();
+		
+		GlfwKeyboardHidDevice keyboardDevice = new GlfwKeyboardHidDevice();
+		keyboardDevice.bindWindow(window.handle());
+		
+		GlfwHidPhantomDevice glfwPhantomDevice = new GlfwHidPhantomDevice();
+		
+		this.hidManager.registerPhantom(glfwPhantomDevice);
+		this.hidManager.register(keyboardDevice);
+		
 		this.inputKeyboard = new InputKeyboard();
-
-		glfwSetKeyCallback(window.handle(), (_, key, scancode, action, _) -> {
-			int keyboardKey = key != GLFW_KEY_UNKNOWN ? key : 1000 + scancode;
-
-			int keyboardAction = mapKeyAction(action);
-
-			this.inputKeyboard.sendKeyAction(keyboardKey, keyboardAction);
-		});
+		this.inputKeyboard.hidManager = this.hidManager;
+		
+		this.inputKeyboard.addKey(HidKeys.EXIT_GAME);
+		this.inputKeyboard.addKey(HidKeys.FORWARD);
+		this.inputKeyboard.addKey(HidKeys.LEFT);
+		this.inputKeyboard.addKey(HidKeys.BACKWARD);
+		this.inputKeyboard.addKey(HidKeys.RIGHT);
 		
 		glfwSetCharCallback(window.handle(), (_, codepoint) -> {
 			if(!this.inputKeyboard.trackCharacter())
@@ -117,42 +135,17 @@ public class Game implements IEngineRoutine
 		});
 
 		this.inputKeyboard.trackCharacter(true);
-
-		this.inputMouse = new InputMouse();
-
-		glfwSetMouseButtonCallback(window.handle(), (_, button, action, _) -> {
-			this.inputMouse.sendButtonAction(button, action);
-		});
-		
-		window.makeContextCurrent();
-
-		createCapabilities();
-
-		if (getCapabilities().GL_KHR_debug) {
-			glEnable(GL_DEBUG_OUTPUT);
-			glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-
-		    GLDebugMessageCallback callback = GLDebugMessageCallback.create((_, _, _, severity, length, message, _) -> {
-		        String msg = GLDebugMessageCallback.getMessage(length, message);
-
-		        String sev = mapSeverity(severity);
-
-		        System.err.println("[GL DEBUG " + sev + "] " + msg);
-		    });
-		    
-		    glDebugMessageCallback(callback, 0);
-		}
 		
 		window.onCloseCallback(this::stop);
 		window.onFramebufferResizeCallback((_, _, w, h) -> {
 			glViewport(0, 0, w, h);
-			camera.projection.set(70.0f * MathUtils.DEG_TO_RADf, w / h, 0.1f, 1000);
+			player.framebufferResize(w, h);
 		});
+
+		this.guiRenderer = new GuiRenderer();
+		this.guiRenderer.init();
 		
 		shader = new TestShader1();
-
-		camera = new Camera(new Vec3F(0, 1.9f, 2));
-		camera.projection.set(70.0f * MathUtils.DEG_TO_RADf, (float)this.window.windowAspectRatio(), 0.1f, 1000);
 
 		OBJFile obj = new OBJFile();
 		obj.load("/res/models/crate_resized_meter.obj");
@@ -164,6 +157,10 @@ public class Game implements IEngineRoutine
 		TextureData textureData = TextureLoader.loadTexture("/res/materials/crate.png");
 		this.texture = TextureUtils.genTexture(textureData);
 
+		this.material = new Material();
+		this.material.albedo = this.texture;
+		this.material.shader = this.shader;
+		
 		this.entityTemplate = new EntityTemplateStaticModel();
 		this.entityTemplate.model = rawModel;
 		this.entityTemplate.texture = texture;
@@ -176,133 +173,62 @@ public class Game implements IEngineRoutine
 		shader2 = new TestShader2();
 
 		entity = this.entityTemplate.createEntity();
-		entity.localTransform.scale.set(1, 1, 1);
-		entity.localTransform.rot.setFromAxisAngle(0, 1, 0, 20 * MathUtils.DEG_TO_RADf);
-		entity.localTransform.pos.set(-5, 0, 0);
+		entity.localTransform.setScale(1, 1, 1);
+		entity.localTransform.setRot(DefaultQuatsIF.fromAxisAngleRad(0, 1, 0, 20 * MathUtils.DEG_TO_RADf, new QuatF()));
+		entity.localTransform.setPos(-5, 0, 0);
 		
 		this.world.add(entity);
 		
 		entity2 = this.entityTemplate.createEntity();
-		entity2.localTransform.scale.set(0.5f, 0.5f, 0.5f);
+		entity2.localTransform.setScale(0.5f, 0.5f, 0.5f);
 		
 		this.world.add(entity2);
+		
+		this.player = new Player(inputKeyboard, window);
 		
 		glCullFace(GL_BACK);
 		glEnable(GL_DEPTH_TEST);
 		glEnable(GL_CULL_FACE);
 
 		window.show();
-		
-		currentTime = System.nanoTime();
-	}
-
-	private int mapKeyAction(int action)
-	{
-		return switch(action) {
-		case GLFW_PRESS -> InputKeyboard.ACTION_PRESSED;
-		case GLFW_REPEAT -> InputKeyboard.ACTION_REPEATED;
-		default -> InputKeyboard.ACTION_RELEASED;
-	};
-	}
-	
-	private String mapSeverity(int severity)
-	{
-		return switch(severity) {
-    	case GL_DEBUG_SEVERITY_NOTIFICATION -> "Info";
-    	case GL_DEBUG_SEVERITY_LOW -> "Low";
-    	case GL_DEBUG_SEVERITY_MEDIUM -> "Medium";
-    	case GL_DEBUG_SEVERITY_HIGH -> "High";
-    	default -> "";
-    };
 	}
 	
 	@Override
 	public void earlyUpdate()
 	{
-		lastTime = currentTime;
-		currentTime = System.nanoTime();
-		delta = currentTime - lastTime;
-
-		inputKeyboard.preUpdate();
-
-		glfwPollEvents();
+		this.player.swapTransforms();
+		
+		hidManager.poll();
+		inputKeyboard.update();
 	}
-
-	public long lastTime;
-	public long currentTime;
-	public float delta;
 
 	@Override
 	public void update()
 	{
-		if(inputKeyboard.isKeyHeld(GLFW_KEY_ESCAPE))
-		{
-			stop();
-		}
+		this.player.update();
+	}
 
-		Vec3F velocity = new Vec3F();
+	float lastAlpha = 0;
+	
+	@Override
+	public void earlyRender(float alpha)
+	{
+		glClearColor(0, 0, 0, 1);
 
-		if(inputKeyboard.isKeyHeld(GLFW_KEY_W))
-		{
-			velocity.add(this.camera.forward().normalize());
-		}
-
-		if(inputKeyboard.isKeyHeld(GLFW_KEY_A))
-		{
-			velocity.add(this.camera.right().negate().normalize());
-		}
-
-		if(inputKeyboard.isKeyHeld(GLFW_KEY_S))
-		{
-			velocity.add(this.camera.forward().negate().normalize());
-		}
-
-		if(inputKeyboard.isKeyHeld(GLFW_KEY_D))
-		{
-			velocity.add(this.camera.right().normalize());
-		}
-
-		velocity.normalize();
-
-		velocity.mul(0.1f);
-
-		camera.move(velocity);
-
-		double[] adx = new double[1];
-		double[] ady = new double[1];
-		glfwGetCursorPos(this.window.handle(), adx, ady);
-
-		float cx =  this.window.windowWidth() * 0.5f;
-		float cy =  this.window.windowHeight() * 0.5f;
-
-		float dx = (float)adx[0];
-		float dy = (float)ady[0];
-
-		float fx = dx - cx;
-		float fy = dy - cy;
-
-		fx *= -0.002f;
-		fy *= -0.002f;
-
-		glfwSetCursorPos(this.window.handle(), cx, cy);
-
-		this.camera.rotate(fy, fx, 0.0f);
-
-		this.animator.update(delta / 1000000000l);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		
+		float dAlpha = alpha - lastAlpha;
+		if(dAlpha < 0) dAlpha += 1;
+		
+		lastAlpha = alpha;
+		
+		this.animator.update(dAlpha * (1.0f / UPS));
 
 		emkp.updateSSBO(this.animModel.bones);
 	}
 
 	@Override
-	public void earlyRender()
-	{
-		glClearColor(0, 0, 0, 1);
-
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	}
-
-	@Override
-	public void render()
+	public void render(float alpha)
 	{
 		Long2ObjectMap<List<Entity>> entityTemplateMapping = new Long2ObjectOpenHashMap<>();
 		
@@ -320,11 +246,13 @@ public class Game implements IEngineRoutine
 		entityTemplates.put(this.entityTemplate.id, this.entityTemplate);
 		
 		shader.start();
-		camera.projection.uploadToShader(shader);
-		shader.setMat4f("m_view", camera.viewMatrix());
+		Camera camera = this.player.getCamera();
 		
-		glEnableVertexAttribArray(0);
-		glEnableVertexAttribArray(1);
+		camera.projection.uploadToShader(shader);
+		shader.setMat4f("m_view", player.viewMatrix(alpha));
+		
+		FFMGL.glEnableVertexAttribArray(0);
+		FFMGL.glEnableVertexAttribArray(1);
 		FFMGL.glDisableVertexAttribArray(5);
 		FFMGL.glDisableVertexAttribArray(6);	
 		
@@ -356,16 +284,18 @@ public class Game implements IEngineRoutine
 		
 		shader2.start();
 		camera.projection.uploadToShader(shader2);
-		shader2.setMat4f("m_view", camera.viewMatrix());
+		shader2.setMat4f("m_view", player.viewMatrix(alpha));
 
 		for (SkinnedMesh mesh : animModel.meshes)
 			mesh.draw();
+		
+		this.guiRenderer.render();
 	}
 
 	@Override
-	public void lateRender()
+	public void lateRender(float alpha)
 	{
-		window.swapBuffers();
+		engine.window().swapBuffers();
 	}
 
 	@Override
@@ -377,7 +307,9 @@ public class Game implements IEngineRoutine
 		this.texture.cleanup();
 
 		shader.releaseResources();
-
-		window.releaseResources();
+		
+		shader2.releaseResources();
+		
+		this.guiRenderer.releaseResources();
 	}
 }

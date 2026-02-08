@@ -1,5 +1,7 @@
 package org.drakum.engine;
 
+import org.barghos.core.time.TimeUtils;
+
 public class FixedTimestepEngineLoop implements IEngineLoop
 {
 
@@ -12,8 +14,6 @@ public class FixedTimestepEngineLoop implements IEngineLoop
 	
 	private long startTime;
 	private long passedTime;
-	
-	private static final double SECOND = 1000000000.0;
 	
 	public FixedTimestepEngineLoop(int desiredUpdateRate)
 	{
@@ -33,7 +33,15 @@ public class FixedTimestepEngineLoop implements IEngineLoop
 		this.passedTime = this.startTime - this.lastTime;
 		this.lastTime = this.startTime;
 		
-		this.unprocessedTime += this.passedTime / SECOND;
+		/*
+		 * passedTime(ns)
+		 * 
+		 * unprocessedTime(s)
+		 * 
+		 * updateTime(s)
+		 */
+		
+		this.unprocessedTime += this.passedTime / TimeUtils.NS_PER_Sd;
 		
 		while(this.unprocessedTime >= this.updateTime)
 		{
@@ -44,9 +52,11 @@ public class FixedTimestepEngineLoop implements IEngineLoop
 			this.unprocessedTime -= this.updateTime;	
 		}
 		
-		routine.earlyRender();
-		routine.render();
-		routine.lateRender();
+		double alpha = this.unprocessedTime / this.updateTime;
+		
+		routine.earlyRender((float)alpha);
+		routine.render((float)alpha);
+		routine.lateRender((float)alpha);
 	}
 
 	@Override

@@ -1,6 +1,6 @@
 package org.drakum;
 
-import org.barghos.api.core.math.MathUtils;
+import org.barghos.core.math.MathUtils;
 import org.barghos.impl.math.matrix.Mat4F;
 
 public class Frustum3F

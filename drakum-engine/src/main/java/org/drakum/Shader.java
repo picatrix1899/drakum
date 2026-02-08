@@ -74,6 +74,18 @@ public class Shader
 		glUniform1i(location, 0);
 	}
 	
+	public void setVector2f(String name, float x, float y)
+	{
+		int location = glGetUniformLocation(this.shaderProgram, name);
+		glUniform2f(location, x, y);
+	}
+	
+	public void setVector3f(String name, float x, float y, float z)
+	{
+		int location = glGetUniformLocation(this.shaderProgram, name);
+		glUniform3f(location, x, y, z);
+	}
+	
 	public void releaseResources()
 	{
 		glDeleteProgram(this.shaderProgram);

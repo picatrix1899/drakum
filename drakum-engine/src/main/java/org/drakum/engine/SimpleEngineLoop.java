@@ -18,9 +18,9 @@ public class SimpleEngineLoop implements IEngineLoop
 		routine.update();
 		routine.lateUpdate();
 		
-		routine.earlyRender();
-		routine.render();
-		routine.lateRender();
+		routine.earlyRender(1);
+		routine.render(1);
+		routine.lateRender(1);
 	}
 
 	@Override

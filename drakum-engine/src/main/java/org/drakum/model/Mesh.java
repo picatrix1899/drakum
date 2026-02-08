@@ -43,42 +43,42 @@ public class Mesh
 			vertexB = vertices.get(i+1);
 			vertexC = vertices.get(i+2);
 
-			pos[i * 3 + 0] = vertexA.pos.v0();
-			pos[i * 3 + 1] = vertexA.pos.v1();
-			pos[i * 3 + 2] = vertexA.pos.v2();
-			pos[i * 3 + 3] = vertexB.pos.v0();
-			pos[i * 3 + 4] = vertexB.pos.v1();
-			pos[i * 3 + 5] = vertexB.pos.v2();
-			pos[i * 3 + 6] = vertexC.pos.v0();
-			pos[i * 3 + 7] = vertexC.pos.v1();
-			pos[i * 3 + 8] = vertexC.pos.v2();
+			pos[i * 3 + 0] = vertexA.pos.x();
+			pos[i * 3 + 1] = vertexA.pos.y();
+			pos[i * 3 + 2] = vertexA.pos.z();
+			pos[i * 3 + 3] = vertexB.pos.x();
+			pos[i * 3 + 4] = vertexB.pos.y();
+			pos[i * 3 + 5] = vertexB.pos.z();
+			pos[i * 3 + 6] = vertexC.pos.x();
+			pos[i * 3 + 7] = vertexC.pos.y();
+			pos[i * 3 + 8] = vertexC.pos.z();
 
-			uvs[i * 2 + 0] = vertexA.uv.v0();
-			uvs[i * 2 + 1] = -vertexA.uv.v1();
-			uvs[i * 2 + 2] = vertexB.uv.v0();
-			uvs[i * 2 + 3] = -vertexB.uv.v1();
-			uvs[i * 2 + 4] = vertexC.uv.v0();
-			uvs[i * 2 + 5] = -vertexC.uv.v1();
+			uvs[i * 2 + 0] = vertexA.uv.x();
+			uvs[i * 2 + 1] = -vertexA.uv.y();
+			uvs[i * 2 + 2] = vertexB.uv.x();
+			uvs[i * 2 + 3] = -vertexB.uv.y();
+			uvs[i * 2 + 4] = vertexC.uv.x();
+			uvs[i * 2 + 5] = -vertexC.uv.y();
 
-			nrm[i * 3 + 0] = vertexA.normal.v0();
-			nrm[i * 3 + 1] = vertexA.normal.v1();
-			nrm[i * 3 + 2] = vertexA.normal.v2();
-			nrm[i * 3 + 3] = vertexB.normal.v0();
-			nrm[i * 3 + 4] = vertexB.normal.v1();
-			nrm[i * 3 + 5] = vertexB.normal.v2();
-			nrm[i * 3 + 6] = vertexC.normal.v0();
-			nrm[i * 3 + 7] = vertexC.normal.v1();
-			nrm[i * 3 + 8] = vertexC.normal.v2();
+			nrm[i * 3 + 0] = vertexA.normal.x();
+			nrm[i * 3 + 1] = vertexA.normal.y();
+			nrm[i * 3 + 2] = vertexA.normal.z();
+			nrm[i * 3 + 3] = vertexB.normal.x();
+			nrm[i * 3 + 4] = vertexB.normal.y();
+			nrm[i * 3 + 5] = vertexB.normal.z();
+			nrm[i * 3 + 6] = vertexC.normal.x();
+			nrm[i * 3 + 7] = vertexC.normal.y();
+			nrm[i * 3 + 8] = vertexC.normal.z();
 
-			tng[i * 3 + 0] = vertexA.tangent.v0();
-			tng[i * 3 + 1] = vertexA.tangent.v1();
-			tng[i * 3 + 2] = vertexA.tangent.v2();
-			tng[i * 3 + 3] = vertexB.tangent.v0();
-			tng[i * 3 + 4] = vertexB.tangent.v1();
-			tng[i * 3 + 5] = vertexB.tangent.v2();
-			tng[i * 3 + 6] = vertexC.tangent.v0();
-			tng[i * 3 + 7] = vertexC.tangent.v1();
-			tng[i * 3 + 8] = vertexC.tangent.v2();
+			tng[i * 3 + 0] = vertexA.tangent.x();
+			tng[i * 3 + 1] = vertexA.tangent.y();
+			tng[i * 3 + 2] = vertexA.tangent.z();
+			tng[i * 3 + 3] = vertexB.tangent.x();
+			tng[i * 3 + 4] = vertexB.tangent.y();
+			tng[i * 3 + 5] = vertexB.tangent.z();
+			tng[i * 3 + 6] = vertexC.tangent.x();
+			tng[i * 3 + 7] = vertexC.tangent.y();
+			tng[i * 3 + 8] = vertexC.tangent.z();
 		}
 
 		int[] indices = new int[ind.size()];
