@@ -8,17 +8,37 @@ import org.barghos.hid.IHidDeviceInputSnapshot;
 import org.barghos.hid.IHidDeviceInputState;
 import org.lwjgl.glfw.GLFW;
 
-public class GlfwKeyboardHidDevice implements IHidDevice
+public class GlfwMouseHidDevice implements IHidDevice
 {
 	public InputSnapshot snapshot = new InputSnapshot();
 	
-	public void onKey(int key, int scancode, int action)
+	private double lastX;
+	private double lastY;
+	
+	public void setLastCursorPos(double x, double y)
+	{
+		lastX = x;
+		lastY = y;
+	}
+	
+	public void onMouseMove(double x, double y)
+	{
+		double rX = x - lastX;
+		double rY = y - lastY;
+		
+		System.out.println("adx=" + lastX + " " + "ady=" + lastY + " " + "x=" + x + " " + "y=" + y + " " + "rX=" + rX + " " + "rY=" + rY);
+		
+		this.lastX = x;
+		this.lastY = y;
+	}
+	
+	public void onButton(int key, int action)
 	{
 		long timestamp = System.nanoTime();
 		
 		if(action == GLFW.GLFW_RELEASE || action == GLFW.GLFW_PRESS)
 		{
-			long inputKey = key != GLFW.GLFW_KEY_UNKNOWN ? key : 100000 + scancode;
+			long inputKey = key;
 			
 			float value = action == GLFW.GLFW_PRESS ? 1.0f : 0.0f;
 			
@@ -34,7 +54,7 @@ public class GlfwKeyboardHidDevice implements IHidDevice
 	@Override
 	public String id()
 	{
-		return "glfwKeyboard";
+		return "glfwMouse";
 	}
 
 	@Override

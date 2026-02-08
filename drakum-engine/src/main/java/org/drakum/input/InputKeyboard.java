@@ -26,13 +26,6 @@ public class InputKeyboard
 		keys.add(key);
 	}
 	
-	public void addGlfwKey(int key)
-	{
-		HidInputKey hidKey = new HidInputKey(0, key);
-		
-		keys.add(hidKey);
-	}
-	
 	public void sendCharEntered(String character)
 	{
 		if(!this.trackCharacter) return;

@@ -11,7 +11,6 @@ import org.barghos.api.math.vector.floats.QuatVecOpsI3F;
 import org.barghos.api.math.vector.floats.VecOpsI3F;
 import org.barghos.core.math.MathUtils;
 import org.barghos.glfw.window.GlfwWindow;
-import org.barghos.hid.HidInputKey;
 import org.barghos.impl.math.matrix.Mat4F;
 import org.barghos.impl.math.quaternion.QuatF;
 import org.barghos.impl.math.transform.Transform3F;
@@ -31,6 +30,8 @@ public class Player implements IActorComponent
 	
 	public Transform3F previousLocalTransform = new Transform3F();
 	public Transform3F localTransform = new Transform3F();
+	
+	private boolean lookEnabled;
 	
 	public Player(InputKeyboard inputKeyboard, GlfwWindow window)
 	{
@@ -93,44 +94,48 @@ public class Player implements IActorComponent
 			this.localTransform.posY += velocity.y;
 			this.localTransform.posZ += velocity.z;
 		}
-
-		double[] adx = new double[1];
-		double[] ady = new double[1];
-		glfwGetCursorPos(this.window.handle(), adx, ady);
-
-		float cx =  this.window.windowWidthf() * 0.5f;
-		float cy =  this.window.windowHeightf() * 0.5f;
-
-		float dx = (float)adx[0];
-		float dy = (float)ady[0];
-
-		float fx = dx - cx;
-		float fy = dy - cy;
-
-		float limitAnglePerFullX = 45 * MathUtils.DEG_TO_RADf;
-		float limitAnglePerFullY = 45 * MathUtils.DEG_TO_RADf;
 		
-		float deltaX = fx / cx;
-		float deltaY = fy / cy;
-		
-		if(deltaX != 0.0f || deltaY != 0.0f)
+		if(this.lookEnabled)
 		{
-			float angleX = deltaX * limitAnglePerFullX;
-			float angleY = deltaY * limitAnglePerFullY;
+			float cx = this.window.windowWidthf() * 0.5f;
+			float cy = this.window.windowHeightf() * 0.5f;
 
-			glfwSetCursorPos(this.window.handle(), cx, cy);
+			float dx = this.window.cursorPosXf();
+			float dy = this.window.cursorPosYf();
 
-			this.pitch += -angleY; //fy;
-			this.yaw += -angleX; //fx;
-			
-			QuatF yawRot = DefaultQuatsIF.fromAxisAngleRad(0, 1, 0, this.yaw, new QuatF());
-			
-			this.localTransform.setRot(yawRot);
+			float fx = dx - cx;
+			float fy = dy - cy;
 
-			QuatF pitchRot = DefaultQuatsIF.fromAxisAngleRad(1, 0, 0, this.pitch, new QuatF());
+			float limitAnglePerFullX = 45 * MathUtils.DEG_TO_RADf;
+			float limitAnglePerFullY = 45 * MathUtils.DEG_TO_RADf;
 			
-			this.camera.localTransform.setRot(pitchRot);
+			float deltaX = fx / cx;
+			float deltaY = fy / cy;
+			
+			if(deltaX != 0.0f || deltaY != 0.0f)
+			{
+				float angleX = deltaX * limitAnglePerFullX;
+				float angleY = deltaY * limitAnglePerFullY;
+
+				this.window.cursorPos(cx, cy);
+
+				this.pitch += -angleY; //fy;
+				this.yaw += -angleX; //fx;
+				
+				QuatF yawRot = DefaultQuatsIF.fromAxisAngleRad(0, 1, 0, this.yaw, new QuatF());
+				
+				this.localTransform.setRot(yawRot);
+
+				QuatF pitchRot = DefaultQuatsIF.fromAxisAngleRad(1, 0, 0, this.pitch, new QuatF());
+				
+				this.camera.localTransform.setRot(pitchRot);
+			}
 		}
+	}
+	
+	public void setLook(boolean enabled)
+	{
+		lookEnabled = enabled;
 	}
 	
 	public Camera getCamera()
