@@ -8,13 +8,15 @@ import org.barghos.api.math.vector.floats.BaseVecOpsI3F;
 import org.barghos.api.math.vector.floats.BaseVecOpsI4F;
 import org.barghos.api.math.vector.floats.Mat4VecOpsI4F;
 import org.barghos.api.math.vector.floats.VecOpsI3F;
-import org.barghos.core.math.MathUtils;
 import org.barghos.glfw.window.GlfwWindow;
+import org.barghos.hid.HidInputKey;
 import org.barghos.hid.HidManager;
+import org.barghos.impl.core.Debug;
 import org.barghos.impl.math.matrix.Mat4F;
 import org.barghos.impl.math.quaternion.DefaultQuatsF;
 import org.barghos.impl.math.vector.Vec3F;
 import org.barghos.impl.math.vector.Vec4F;
+import org.drakum.GlUtils;
 import org.drakum.Material;
 import org.drakum.OBJFile;
 import org.drakum.Shader;
@@ -22,10 +24,13 @@ import org.drakum.Texture;
 import org.drakum.TextureData;
 import org.drakum.TextureLoader;
 import org.drakum.TextureUtils;
+import org.drakum.advInput.AdvancedInputManager;
+import org.drakum.advInput.HighCondition;
+import org.drakum.advInput.InputAction;
+import org.drakum.advInput.RaiseCondition;
 import org.drakum.anim.Animator;
 import org.drakum.anim.AssimpLoader;
 import org.drakum.anim.EmKp;
-import org.drakum.boilerplate.FFMGL;
 import org.drakum.engine.Engine;
 import org.drakum.engine.FixedTimestepEngineLoop;
 import org.drakum.engine.IEngineRoutine;
@@ -33,6 +38,7 @@ import org.drakum.entity.Entity;
 import org.drakum.entity.EntityTemplateStaticModel;
 import org.drakum.entity.IEntityTemplate;
 import org.drakum.entity.ITexturedModelProvider;
+import org.drakum.hid.CallbackHidPhantomDevice;
 import org.drakum.hid.GlfwHidPhantomDevice;
 import org.drakum.hid.GlfwKeyboardHidDevice;
 import org.drakum.hid.GlfwMouseHidDevice;
@@ -57,8 +63,6 @@ public class Game implements IEngineRoutine
 	private Shader shader;
 
 	private RawModel rawModel;
-
-	private Material material;
 	
 	private Texture texture;
 
@@ -72,15 +76,14 @@ public class Game implements IEngineRoutine
 
 	private Entity entity;
 	private Entity entity2;
-	private EntityTemplateStaticModel entityTemplate;
 	
 	private Player player;
 	
-	private List<Entity> world = new ArrayList<>();
-	
-	public static int UPS = 40;
+	public static int UPS = 20;
 	
 	private HidManager hidManager;
+	
+	private AdvancedInputManager advInputManager;
 	
 	private GuiRenderer guiRenderer;
 	
@@ -112,7 +115,8 @@ public class Game implements IEngineRoutine
 		windowSettings.isResizable = true;
 		windowSettings.windowWidth = 800;
 		windowSettings.windowHeight = 600;
-
+		windowSettings.msaaSamples = 16;
+		
 		GlfwWindow window = GlfwWindow.create(windowSettings);
 		
 		engine.setWindow(window);
@@ -120,14 +124,18 @@ public class Game implements IEngineRoutine
 		this.hidManager = new HidManager();
 		
 		GlfwHidPhantomDevice glfwPhantomDevice = new GlfwHidPhantomDevice();
+		CallbackHidPhantomDevice windowCursorPhantomDevice = new CallbackHidPhantomDevice("windowCursor", window::updateCursorPos);
+		
 		
 		GlfwKeyboardHidDevice keyboardDevice = new GlfwKeyboardHidDevice();
 		glfwSetKeyCallback(window.handle(), (_, key, scancode, action, _) -> keyboardDevice.onKey(key, scancode, action));
 		
 		GlfwMouseHidDevice mouseDevice = new GlfwMouseHidDevice();
 		glfwSetMouseButtonCallback(window.handle(), (_, key, action, _) -> mouseDevice.onButton(key, action));
+		window.onCursorPosChangeCallback(((_, _, _, _, deltaX, deltaY) -> mouseDevice.onMouseMove(deltaX, deltaY)));
 		
 		this.hidManager.registerPhantom(glfwPhantomDevice);
+		this.hidManager.registerPhantom(windowCursorPhantomDevice);
 		this.hidManager.register(keyboardDevice);
 		this.hidManager.register(mouseDevice);
 		
@@ -154,8 +162,17 @@ public class Game implements IEngineRoutine
 		this.inputMouse = new InputMouse();
 		this.inputMouse.hidManager = this.hidManager;
 		
-		this.inputMouse.addButton(HidKeys.LOOK);
+		this.inputMouse.addButton(HidKeys.TOOGLE_LOOK);
 		this.inputMouse.addButton(HidKeys.INTERACT);
+		
+		advInputManager = new AdvancedInputManager();
+		advInputManager.hidManager = this.hidManager;
+		
+		InputAction forwardAction = new InputAction();
+		forwardAction.condition = new HighCondition(HidKeys.FORWARD);
+		forwardAction.callback = () -> this.player.moveForward();
+		
+		advInputManager.actions.add(forwardAction);
 		
 		window.onCloseCallback(this::stop);
 		window.onFramebufferResizeCallback((_, _, w, h) -> {
@@ -168,8 +185,7 @@ public class Game implements IEngineRoutine
 		
 		shader = new TestShader1();
 		
-		OBJFile obj = new OBJFile();
-		obj.load("/res/models/crate_resized_meter.obj");
+		OBJFile obj = OBJFile.load("/res/models/crate_resized_meter.obj");
 
 		ConstMesh mesh = new ConstMesh(obj);
 
@@ -177,14 +193,6 @@ public class Game implements IEngineRoutine
 		
 		TextureData textureData = TextureLoader.loadTexture("/res/materials/crate.png");
 		this.texture = TextureUtils.genTexture(textureData);
-
-		this.material = new Material();
-		this.material.albedo = this.texture;
-		this.material.shader = this.shader;
-		
-		this.entityTemplate = new EntityTemplateStaticModel();
-		this.entityTemplate.model = rawModel;
-		this.entityTemplate.texture = texture;
 		
 		animModel = AssimpLoader.load("/res/Only_Spider_with_Animations_Export.dae");
 		animator = animModel.createAnimator(0);
@@ -193,26 +201,20 @@ public class Game implements IEngineRoutine
 		
 		shader2 = new TestShader2();
 
-		entity = this.entityTemplate.createEntity();
+		entity = new Entity(0, 0);
 		entity.localTransform.setScale(1, 1, 1);
-		entity.localTransform.setRot(DefaultQuatsF.fromAxisAngleDeg_const(0, 1, 0, 20));
 		entity.localTransform.setPos(-5, 0, 0);
 		
 		min.set(-0.5f - 5, -0.5f, -0.5f);
 		max.set(0.5f - 5, 0.5f, 0.5f);
-		
-		this.world.add(entity);
-		
-		entity2 = this.entityTemplate.createEntity();
-		entity2.localTransform.setScale(0.5f, 0.5f, 0.5f);
-		
-		this.world.add(entity2);
 		
 		this.player = new Player(inputKeyboard, window);
 		
 		glCullFace(GL_BACK);
 		glEnable(GL_DEPTH_TEST);
 		glEnable(GL_CULL_FACE);
+		
+		glfwSwapInterval(0);
 		
 		window.show();
 	}
@@ -223,136 +225,127 @@ public class Game implements IEngineRoutine
 	@Override
 	public void earlyUpdate()
 	{
+		Game.engine.window().updateWindowState();
+		
 		this.player.swapTransforms();
 		
 		hidManager.poll();
 		inputKeyboard.update();
 		inputMouse.update();
+		
+		advInputManager.update();
 	}
 
+	private boolean cursorDisabled;
+	
 	@Override
 	public void update()
 	{
-		if(this.inputMouse.isKeyHeld(HidKeys.LOOK))
+		if(this.inputMouse.isKeyHeld(HidKeys.TOOGLE_LOOK))
 		{
-			Game.engine.window().disabledCursor();
-			this.player.setLook(true);
+			if(!cursorDisabled)
+			{
+				Game.engine.window().disabledCursor();
+				Game.engine.window().rawMouseInput(true);
+				this.player.setLook(true);
+				cursorDisabled = true;
+			}
+			
 		}
 		else
 		{
-			Game.engine.window().normalCursor();
-			this.player.setLook(false);
+			if(cursorDisabled)
+			{
+				Game.engine.window().normalCursor();
+				Game.engine.window().rawMouseInput(false);
+				this.player.setLook(false);
+				cursorDisabled = false;
+			}
+			
 		}
 		
 		this.player.update();
 		
-		if(this.inputMouse.isKeyPressed(HidKeys.INTERACT))
-		{
-			picking();
-		}
-		
-		if(this.pickedEntity != null && this.inputMouse.isKeyHeld(HidKeys.INTERACT))
-		{
-			GlfwWindow window = Game.engine.window();
-			
-			float dx = window.cursorPosXf() - window.lastCursorPosXf();
-			
-			if(dx != 0) {
-				float factored = dx * 0.01f;
-				
-				this.pickedEntity.localTransform.posX += factored;
-				this.min.x += factored;
-				this.max.x += factored;
-			}
-		}
-		
-		if(this.inputMouse.isKeyReleased(HidKeys.INTERACT))
-		{
-			this.pickedEntity = null;
-		}
+//		if(this.inputMouse.isKeyPressed(HidKeys.INTERACT))
+//		{
+//			picking();
+//		}
+//		
+//		if(this.pickedEntity != null && this.inputMouse.isKeyHeld(HidKeys.INTERACT))
+//		{
+//			GlfwWindow window = Game.engine.window();
+//			
+//			double dx = window.cursorPosX() - window.lastCursorPosX();
+//			
+//			if(dx != 0) {
+//				float factored = (float)dx * 0.01f;
+//				
+//				this.pickedEntity.localTransform.posX += factored;
+//				this.min.x += factored;
+//				this.max.x += factored;
+//			}
+//		}
+//		
+//		if(this.inputMouse.isKeyReleased(HidKeys.INTERACT))
+//		{
+//			this.pickedEntity = null;
+//		}
 	}
-
+	
 	float lastAlpha = 0;
 	
 	@Override
 	public void earlyRender(float alpha)
 	{
 		glClearColor(0, 0, 0, 1);
-
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		
-		float dAlpha = alpha - lastAlpha;
-		if(dAlpha < 0) dAlpha += 1;
-		
-		lastAlpha = alpha;
-		
-		this.animator.update(dAlpha * (1.0f / UPS));
-
-		emkp.updateSSBO(this.animModel.bones);
+//		float dAlpha = alpha - lastAlpha;
+//		if(dAlpha < 0) dAlpha += 1;
+//		
+//		lastAlpha = alpha;
+//		
+//		this.animator.update(dAlpha * (1.0f / UPS));
+//
+//		emkp.updateSSBO(this.animModel.bones);
 	}
 
 	@Override
 	public void render(float alpha)
 	{
-		Long2ObjectMap<List<Entity>> entityTemplateMapping = new Long2ObjectOpenHashMap<>();
-		
-		for(Entity entity : this.world)
-		{
-			if(!entityTemplateMapping.containsKey(entity.template))
-			{
-				entityTemplateMapping.put(entity.template, new ArrayList<Entity>());
-			}
-			
-			entityTemplateMapping.get(entity.template).add(entity);
-		}
-		
-		Long2ObjectMap<IEntityTemplate> entityTemplates = new Long2ObjectOpenHashMap<>();
-		entityTemplates.put(this.entityTemplate.id, this.entityTemplate);
-		
 		shader.start();
 		Camera camera = this.player.getCamera();
 		
+		Mat4F view = player.viewMatrix(alpha);
+		
 		camera.projection.uploadToShader(shader);
-		shader.setMat4f("m_view", player.viewMatrix(alpha));
+		shader.setMat4f("m_view", view);
 		
-		FFMGL.glEnableVertexAttribArray(0);
-		FFMGL.glEnableVertexAttribArray(1);
-		FFMGL.glDisableVertexAttribArray(5);
-		FFMGL.glDisableVertexAttribArray(6);	
-		
-		for(IEntityTemplate template : entityTemplates.values())
-		{
-			ITexturedModelProvider modelProvider = (ITexturedModelProvider)template;
-			
-			RawModel model = modelProvider.getModel();
-			Texture texture = modelProvider.getTexture();
-			List<Entity> templateEntities = entityTemplateMapping.get(template.getId());
-			
-			shader.setTexture("albedo", texture);
-			
-			for(ConstMesh mesh : model.meshes())
-			{
-				for(Entity entity : templateEntities)
-				{
-					shader.setMat4f("m_model", entity.modelMatrix());
-					
-					mesh.draw();
-				}
-			}
-		}
-		
-		FFMGL.glEnableVertexAttribArray(0);
-		FFMGL.glEnableVertexAttribArray(1);
-		FFMGL.glEnableVertexAttribArray(5);
-		FFMGL.glEnableVertexAttribArray(6);
-		
-		shader2.start();
-		camera.projection.uploadToShader(shader2);
-		shader2.setMat4f("m_view", player.viewMatrix(alpha));
+	//	GlUtils.disableVertexAttribArray(5, 6);
 
-		for (SkinnedMesh mesh : animModel.meshes)
-			mesh.draw();
+		RawModel model = this.rawModel;
+		Texture texture = this.texture;
+		Entity entity = this.entity;
 		
+		shader.setTexture("albedo", texture);
+		
+		for(ConstMesh mesh : model.meshes())
+		{
+			mesh.vao.bind();
+			GlUtils.enableVertexAttribArray(0, 1);
+			
+			shader.setMat4f("m_model", entity.modelMatrix(alpha));
+			
+			mesh.draw();
+		}
+//		
+//		shader2.start();
+//		camera.projection.uploadToShader(shader2);
+//		shader2.setMat4f("m_view", view);
+//
+//		for (SkinnedMesh mesh : animModel.meshes)
+//			mesh.draw();
+//		
 		this.guiRenderer.render();
 	}
 
@@ -389,8 +382,8 @@ public class Game implements IEngineRoutine
 		float wh = window.windowHeightf();
 		float fw = window.framebufferWidthf();
 		float fh = window.framebufferHeightf();
-		float mx = window.cursorPosXf();
-		float my = window.cursorPosYf();
+		float mx = (float)window.cursorPosX();
+		float my = (float)window.cursorPosY();
 		
 		// Inputs: mx,my from glfwGetCursorPos (window coords)
 		// Mat4f: proj, view

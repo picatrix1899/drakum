@@ -1,7 +1,5 @@
 package org.drakum.demo;
 
-import static org.lwjgl.glfw.GLFW.*;
-
 import org.barghos.api.math.matrix.DefaultMatsI4F;
 import org.barghos.api.math.matrix.MatOpsI4F;
 import org.barghos.api.math.quaternion.DefaultQuatsIF;
@@ -11,6 +9,7 @@ import org.barghos.api.math.vector.floats.QuatVecOpsI3F;
 import org.barghos.api.math.vector.floats.VecOpsI3F;
 import org.barghos.core.math.MathUtils;
 import org.barghos.glfw.window.GlfwWindow;
+import org.barghos.hid.HidInputState;
 import org.barghos.impl.math.matrix.Mat4F;
 import org.barghos.impl.math.quaternion.QuatF;
 import org.barghos.impl.math.transform.Transform3F;
@@ -58,28 +57,24 @@ public class Player implements IActorComponent
 
 		Vec3F velocity = new Vec3F();
 
-		if(inputKeyboard.isKeyHeld(HidKeys.FORWARD))
-		{
-			BaseVecOpsI3F.add(velocity, forward(), velocity);
-			VecOpsI3F.normalize(velocity, velocity);
-		}
+//		if(inputKeyboard.isKeyHeld(HidKeys.FORWARD))
+//		{
+//			BaseVecOpsI3F.add(velocity, forward(), velocity);
+//		}
 
 		if(inputKeyboard.isKeyHeld(HidKeys.LEFT))
 		{
 			BaseVecOpsI3F.sub(velocity, right(), velocity);
-			VecOpsI3F.normalize(velocity, velocity);
 		}
 
 		if(inputKeyboard.isKeyHeld(HidKeys.BACKWARD))
 		{
 			BaseVecOpsI3F.sub(velocity, forward(), velocity);
-			VecOpsI3F.normalize(velocity, velocity);
 		}
 
 		if(inputKeyboard.isKeyHeld(HidKeys.RIGHT))
 		{
 			BaseVecOpsI3F.add(velocity, right(), velocity);
-			VecOpsI3F.normalize(velocity, velocity);
 		}
 
 		float updateTime = 1.0f / Game.UPS;
@@ -97,39 +92,47 @@ public class Player implements IActorComponent
 		
 		if(this.lookEnabled)
 		{
-			float cx = this.window.windowWidthf() * 0.5f;
-			float cy = this.window.windowHeightf() * 0.5f;
-
-			float dx = this.window.cursorPosXf();
-			float dy = this.window.cursorPosYf();
-
-			float fx = dx - cx;
-			float fy = dy - cy;
-
-			float limitAnglePerFullX = 45 * MathUtils.DEG_TO_RADf;
-			float limitAnglePerFullY = 45 * MathUtils.DEG_TO_RADf;
-			
-			float deltaX = fx / cx;
-			float deltaY = fy / cy;
-			
-			if(deltaX != 0.0f || deltaY != 0.0f)
+			HidInputState stateX = this.inputKeyboard.hidManager.getState(HidKeys.LOOK_X);
+			if(stateX != null && stateX.value != 0.0f)
 			{
-				float angleX = deltaX * limitAnglePerFullX;
-				float angleY = deltaY * limitAnglePerFullY;
-
-				this.window.cursorPos(cx, cy);
-
-				this.pitch += -angleY; //fy;
-				this.yaw += -angleX; //fx;
-				
-				QuatF yawRot = DefaultQuatsIF.fromAxisAngleRad(0, 1, 0, this.yaw, new QuatF());
-				
-				this.localTransform.setRot(yawRot);
-
-				QuatF pitchRot = DefaultQuatsIF.fromAxisAngleRad(1, 0, 0, this.pitch, new QuatF());
-				
-				this.camera.localTransform.setRot(pitchRot);
+				this.yaw += -stateX.value; // * 0.001f;
+				this.yaw = this.yaw % (MathUtils.DEG_TO_RADf * 360);
 			}
+			
+			HidInputState stateY = this.inputKeyboard.hidManager.getState(HidKeys.LOOK_Y);
+			if(stateY != null && stateX.value != 0.0f)
+			{
+				this.pitch += -stateY.value; //* 0.001f;
+				this.pitch = this.pitch % (MathUtils.DEG_TO_RADf * 360);
+			}
+			
+			QuatF yawRot = DefaultQuatsIF.fromAxisAngleRad(0, 1, 0, this.yaw, new QuatF());
+			
+			this.localTransform.setRot(yawRot);
+
+			QuatF pitchRot = DefaultQuatsIF.fromAxisAngleRad(1, 0, 0, this.pitch, new QuatF());
+			
+			this.camera.localTransform.setRot(pitchRot);
+		}
+	}
+	
+	public void moveForward()
+	{
+		Vec3F velocity = new Vec3F();
+		
+		BaseVecOpsI3F.add(velocity, forward(), velocity);
+		
+		float updateTime = 1.0f / Game.UPS;
+		
+		if(velocity.x != 0 || velocity.y != 0 || velocity.z != 0)
+		{
+			VecOpsI3F.normalize(velocity, velocity);
+			
+			BaseVecOpsI3F.mul(velocity, updateTime * 2f, velocity);
+
+			this.localTransform.posX += velocity.x;
+			this.localTransform.posY += velocity.y;
+			this.localTransform.posZ += velocity.z;
 		}
 	}
 	
@@ -182,7 +185,9 @@ public class Player implements IActorComponent
 		
 		Mat4F trRot = MatOpsI4F.transpose(rot, new Mat4F()); 
 		
-		return MatOpsI4F.mul(view, trRot, view);//.revMul(rot); // Worldspace = righthanded(forward=-z); NDC = lefthanded(up=-y)
+		MatOpsI4F.mul(view, trRot, view);
+		
+		return view; // Worldspace = righthanded(forward=-z); NDC = lefthanded(up=-y)
 	}
 
 	public void swapTransforms()

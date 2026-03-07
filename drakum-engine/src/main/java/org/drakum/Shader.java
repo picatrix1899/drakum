@@ -25,7 +25,7 @@ public class Shader
 	
 	public void vertexShader(String file)
 	{
-		if(this.shaders.containsKey(GL_VERTEX_SHADER)) throw new RuntimeException("Shader slot already occupied.");
+		if(this.shaders.containsKey(GL_VERTEX_SHADER)) throw new RuntimeException("Shader slot for vertex shader already occupied.");
 		
 		int shader = loadShader(file, GL_VERTEX_SHADER);
 		
@@ -36,7 +36,7 @@ public class Shader
 	
 	public void fragmentShader(String file)
 	{
-		if(this.shaders.containsKey(GL_FRAGMENT_SHADER)) throw new RuntimeException("Shader slot already occupied.");
+		if(this.shaders.containsKey(GL_FRAGMENT_SHADER)) throw new RuntimeException("Shader slot for fragment shader already occupied.");
 		
 		int shader = loadShader(file, GL_FRAGMENT_SHADER);
 		
@@ -84,6 +84,12 @@ public class Shader
 	{
 		int location = glGetUniformLocation(this.shaderProgram, name);
 		glUniform3f(location, x, y, z);
+	}
+	
+	public void setVector4f(String name, float x, float y, float z, float w)
+	{
+		int location = glGetUniformLocation(this.shaderProgram, name);
+		glUniform4f(location, x, y, z, w);
 	}
 	
 	public void releaseResources()

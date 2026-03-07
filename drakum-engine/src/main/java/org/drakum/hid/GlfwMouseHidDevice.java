@@ -1,35 +1,51 @@
 package org.drakum.hid;
 
-import java.util.HashSet;
-import java.util.Set;
-
+import org.barghos.core.math.MathUtils;
 import org.barghos.hid.IHidDevice;
 import org.barghos.hid.IHidDeviceInputSnapshot;
-import org.barghos.hid.IHidDeviceInputState;
 import org.lwjgl.glfw.GLFW;
 
 public class GlfwMouseHidDevice implements IHidDevice
 {
-	public InputSnapshot snapshot = new InputSnapshot();
+	public DefaultHidDeviceInputSnapshot<DefaultHidDeviceInputState> snapshot = new DefaultHidDeviceInputSnapshot<>();
 	
-	private double lastX;
-	private double lastY;
+	public double horizontalMax = 400;
+	public double verticalMax = 400;
 	
-	public void setLastCursorPos(double x, double y)
-	{
-		lastX = x;
-		lastY = y;
-	}
+	private boolean hasMovedX = false;
+	private boolean hasMovedY = false;
 	
 	public void onMouseMove(double x, double y)
 	{
-		double rX = x - lastX;
-		double rY = y - lastY;
+		long timestamp = System.nanoTime();
 		
-		System.out.println("adx=" + lastX + " " + "ady=" + lastY + " " + "x=" + x + " " + "y=" + y + " " + "rX=" + rX + " " + "rY=" + rY);
+		if(x != 0)
+		{
+			double valueX = MathUtils.clamp(MathUtils.clamp(x, -horizontalMax, horizontalMax) / horizontalMax, -1.0, 1.0);
+			
+			DefaultHidDeviceInputState stateX = new DefaultHidDeviceInputState();
+			stateX.id = -2;
+			stateX.timestamp = timestamp;
+			stateX.value = (float)valueX;
+			
+			this.snapshot.states.add(stateX);
+			
+			hasMovedX = true;
+		}
 		
-		this.lastX = x;
-		this.lastY = y;
+		if(y != 0)
+		{
+			double valueY = MathUtils.clamp(MathUtils.clamp(y, -verticalMax, verticalMax) / verticalMax, -1.0, 1.0);
+			
+			DefaultHidDeviceInputState stateY = new DefaultHidDeviceInputState();
+			stateY.id = -1;
+			stateY.timestamp = timestamp;
+			stateY.value = (float)valueY;
+			
+			this.snapshot.states.add(stateY);
+			
+			hasMovedY = true;
+		}
 	}
 	
 	public void onButton(int key, int action)
@@ -42,7 +58,7 @@ public class GlfwMouseHidDevice implements IHidDevice
 			
 			float value = action == GLFW.GLFW_PRESS ? 1.0f : 0.0f;
 			
-			InputState state = new InputState();
+			DefaultHidDeviceInputState state = new DefaultHidDeviceInputState();
 			state.id = inputKey;
 			state.timestamp = timestamp;
 			state.value = value;
@@ -60,56 +76,41 @@ public class GlfwMouseHidDevice implements IHidDevice
 	@Override
 	public void reset()
 	{
-		this.snapshot = new InputSnapshot();
+		this.snapshot = new DefaultHidDeviceInputSnapshot<>();
+		
+		this.hasMovedX = false;
+		this.hasMovedY = false;
 	}
 	
 	@Override
 	public void poll()
 	{
+		long timestamp = System.nanoTime();
+		
+		if(!this.hasMovedX)
+		{
+			DefaultHidDeviceInputState stateX = new DefaultHidDeviceInputState();
+			stateX.id = -2;
+			stateX.timestamp = timestamp;
+			stateX.value = 0.0f;
+			
+			this.snapshot.states.add(stateX);
+		}
+		
+		if(!this.hasMovedY)
+		{
+			DefaultHidDeviceInputState stateY = new DefaultHidDeviceInputState();
+			stateY.id = -1;
+			stateY.timestamp = timestamp;
+			stateY.value = 0.0f;
+			
+			this.snapshot.states.add(stateY);
+		}
 	}
 
 	@Override
 	public IHidDeviceInputSnapshot query()
 	{
 		return this.snapshot;
-	}
-
-	private static class InputSnapshot implements IHidDeviceInputSnapshot
-	{
-		public Set<InputState> states = new HashSet<>();
-		
-		@Override
-		public Set<? extends IHidDeviceInputState> states()
-		{
-			return this.states;
-		}
-		
-	}
-	
-	private static class InputState implements IHidDeviceInputState
-	{
-		public long id;
-		public float value;
-		public long timestamp;
-		
-		
-		@Override
-		public long id()
-		{
-			return id;
-		}
-
-		@Override
-		public float value()
-		{
-			return value;
-		}
-
-		@Override
-		public long timestamp()
-		{
-			return timestamp;
-		}
-		
 	}
 }

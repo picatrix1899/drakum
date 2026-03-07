@@ -12,6 +12,9 @@ public class HidKeys
 	public static HidInputKey LEFT = new HidInputKey(0, GLFW_KEY_A);
 	public static HidInputKey RIGHT = new HidInputKey(0, GLFW_KEY_D);
 	
-	public static HidInputKey LOOK = new HidInputKey(1, 2);
+	public static HidInputKey TOOGLE_LOOK = new HidInputKey(1, 2);
 	public static HidInputKey INTERACT = new HidInputKey(1, 0);
+	
+	public static HidInputKey LOOK_X = new HidInputKey(1, -2);
+	public static HidInputKey LOOK_Y = new HidInputKey(1, -1);
 }

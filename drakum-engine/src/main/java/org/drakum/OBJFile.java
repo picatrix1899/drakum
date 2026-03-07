@@ -22,7 +22,7 @@ public class OBJFile
 	public Vec3F min = new Vec3F(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY);
 	public Vec3F max = new Vec3F(Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY);
 	
-	public void load(String file)
+	public static OBJFile load(String file)
 	{	
 		try
 		{
@@ -35,6 +35,8 @@ public class OBJFile
 
 			Vec3F position;
 			
+			OBJFile obj = new OBJFile();
+			
 			while((line = reader.readLine()) != null)
 			{
 				if(line.startsWith("v "))
@@ -43,45 +45,48 @@ public class OBJFile
 					
 					position = new Vec3F(Float.parseFloat(parts[1]), Float.parseFloat(parts[2]), Float.parseFloat(parts[3]));
 					
-					this.pos.add(position);
+					obj.pos.add(position);
 				}
 				else if(line.startsWith("vt "))
 				{
 					parts = line.split(" ");
-					uvs.add(new Vec2F(Float.parseFloat(parts[1]),Float.parseFloat(parts[2])));
+					obj.uvs.add(new Vec2F(Float.parseFloat(parts[1]),Float.parseFloat(parts[2])));
 				}
 				else if(line.startsWith("vn "))
 				{
 					parts = line.split(" ");
-					normals.add(new Vec3F(Float.parseFloat(parts[1]),Float.parseFloat(parts[2]),Float.parseFloat(parts[3])));
+					obj.normals.add(new Vec3F(Float.parseFloat(parts[1]),Float.parseFloat(parts[2]),Float.parseFloat(parts[3])));
 				}
 				else if(line.startsWith("f "))
 				{
 					parts = line.split(" ");
 					
 					
-					Vertex vA = processVertex(parts[1]);
-					Vertex vB = processVertex(parts[2]);
-					Vertex vC = processVertex(parts[3]);
+					Vertex vA = processVertex(obj, parts[1]);
+					Vertex vB = processVertex(obj, parts[2]);
+					Vertex vC = processVertex(obj, parts[3]);
 					
 					calculateTangents(vA, vB, vC);	
 					
-					vertices.add(vA);
-					vertices.add(vB);
-					vertices.add(vC);
+					obj.vertices.add(vA);
+					obj.vertices.add(vB);
+					obj.vertices.add(vC);
 				}
 			}
 			
 			reader.close();
 			
+			return obj;
 		}
 		catch(Exception e)
 		{
 			e.printStackTrace();
 		}
+		
+		return null;
 	}
 	
-	private Vertex processVertex(String line)
+	private static Vertex processVertex(OBJFile obj, String line)
 	{
 		String[] vertex = line.split("/");
 		
@@ -93,17 +98,17 @@ public class OBJFile
 		
 		v = new Vertex();
 		
-		v.pos = this.pos.get(posIndex);
-		v.uv = this.uvs.get(textureIndex);
-		v.normal = this.normals.get(normalIndex);
+		v.pos = obj.pos.get(posIndex);
+		v.uv = obj.uvs.get(textureIndex);
+		v.normal = obj.normals.get(normalIndex);
 		v.tangent = new Vec3F();
 
-		this.indices.add(this.indices.size());
+		obj.indices.add(obj.indices.size());
 		
 		return v;
 	}
 	
-	private void calculateTangents(Vertex a, Vertex b, Vertex c)
+	private static void calculateTangents(Vertex a, Vertex b, Vertex c)
 	{
 		Vec3F deltaPos1 = BaseVecOpsI3F.sub(b.pos, a.pos, new Vec3F());
 		Vec3F deltaPos2 = BaseVecOpsI3F.sub(c.pos, a.pos, new Vec3F());
